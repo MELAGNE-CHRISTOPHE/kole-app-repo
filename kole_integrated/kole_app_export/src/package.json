@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "jest"
+    "start": "node your_main_file.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
