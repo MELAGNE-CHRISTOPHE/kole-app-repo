@@ -1,0 +1,31 @@
+/* Suppression de Tailwind pour éviter les conflits */
+/* @tailwind base;
+@tailwind components;
+@tailwind utilities; */
+
+/* Import du thème Kôlê personnalisé */
+@import './styles/theme.css';
+
+/* Reset global pour éviter les conflits */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  font-family: 'Roboto', 'Inter', sans-serif;
+  color: var(--kole-text-dark);
+  background-color: var(--kole-cream-bg);
+  line-height: 1.6;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
