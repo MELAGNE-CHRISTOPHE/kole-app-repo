@@ -1,91 +1,166 @@
 // src/pages/client/ClientRideHistoryPage.tsx
-import React from "react";
-// import { useNavigate } from "react-router-dom"; // Supprimé car non utilisé pour l'instant
-import { Card, CardContent } from "../../components/ui/card";
-import { ScrollArea } from "../../components/ui/scroll-area";
-import { ListFilter } from "lucide-react"; // ArrowLeft supprimé car non utilisé
-import ClientBottomNavBar from "../../components/ClientBottomNavBar";
-
-// Dummy data structure based on the mockup "Client_Historique_Trajets.png"
-const rideHistoryData = [
-  {
-    id: "1",
-    date: "Hier, 10:15",
-    pickup: "Cocody Angré",
-    destination: "Plateau Cite Admin.",
-    price: "700 FCFA",
-    driverName: "Moussa K.",
-    status: "Terminé", // Implicit from mockup context
-  },
-  {
-    id: "2",
-    date: "Hier, 8:20",
-    pickup: "Cocody Angré",
-    destination: "Popougon Maroc",
-    price: "850 FCFA",
-    driverName: "Moussa K.",
-    status: "Terminé",
-  },
-  {
-    id: "3",
-    date: "Hier, 7:00",
-    pickup: "Cocody Angré",
-    destination: "Marcory Résidentiel",
-    price: "500 FCFA",
-    driverName: "Moussa K.",
-    status: "Terminé",
-  },
-  // Add more entries as needed to test scrolling
-];
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { ScrollArea } from '../../components/ui/scroll-area';
+import { ArrowLeft, Filter, Loader2, Calendar, MapPin, UserCircle, AlertTriangle } from 'lucide-react';
+import ClientBottomNavBar from '../../components/ClientBottomNavBar';
+import { getRideHistory, RideHistoryEntry, ServiceError } from '../../services/rideService';
+import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'; // Assuming Avatar is here
 
 const ClientRideHistoryPage: React.FC = () => {
-  // const navigate = useNavigate(); // Supprimé car non utilisé pour l'instant
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  const [rides, setRides] = useState<RideHistoryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const fetchHistory = async (page: number) => {
+    setIsLoading(true);
+    const result = await getRideHistory(page, 5); // Fetch 5 items per page
+    if (result.data) {
+      setRides(result.data);
+      setTotalPages(result.totalPages);
+      setCurrentPage(result.currentPage);
+    } else if (result.error) {
+      toast.error(t(result.error.messageKey, { details: result.error.details }));
+      setRides([]); // Clear rides on error
+      setTotalPages(0);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchHistory(currentPage);
+  }, [currentPage, t]); // Added t to dependencies for toast messages
+
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+  };
+
+  const RideStatusBadge: React.FC<{ statusKey: string }> = ({ statusKey }) => {
+    const statusText = t(statusKey);
+    let bgColor = 'bg-kole-gray-light'; // Default or pending
+    let textColor = 'text-kole-text-secondary';
+
+    if (statusKey === 'rideStatuses.completed') {
+      bgColor = 'bg-kole-green-light';
+      textColor = 'text-kole-green-dark';
+    } else if (statusKey === 'rideStatuses.cancelled') {
+      bgColor = 'bg-kole-red-error/20'; // Lighter red
+      textColor = 'text-kole-destructive';
+    }
+    // Add more conditions for other statuses if needed
+
+    return (
+      <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>
+        {statusText}
+      </span>
+    );
+  };
+
 
   return (
-    <div className="h-screen flex flex-col bg-kole-cream-bg">
-      {/* Header */}
-      <div className="bg-kole-cream-bg p-4 pt-6 flex items-center justify-between sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-kole-text-primary ml-1">Mes trajets</h1>
-        <button className="p-2 rounded-full hover:bg-gray-200/50">
-          <ListFilter size={22} className="text-kole-text-primary" />
-        </button>
+    <div className="flex flex-col h-screen bg-kole-cream-bg">
+      <div className="bg-white shadow-sm p-4 flex items-center border-b border-kole-border sticky top-0 z-10">
+        <Button variant="ghost" size="icon" className="mr-2 hover:bg-kole-hover-bg rounded-full" onClick={() => navigate('/client')}>
+          <ArrowLeft className="h-5 w-5 text-kole-text-primary" />
+        </Button>
+        <h1 className="text-lg font-semibold text-kole-text-primary">{t('clientRideHistoryPage.title')}</h1>
+        <Button variant="ghost" size="icon" className="ml-auto hover:bg-kole-hover-bg rounded-full" aria-label={t('clientRideHistoryPage.filterButtonLabel')}>
+          <Filter className="h-5 w-5 text-kole-text-primary" />
+        </Button>
       </div>
-      
-      {rideHistoryData.length > 0 ? (
-        <ScrollArea className="flex-grow px-4 pb-4">
-          <div className="space-y-3">
-            {rideHistoryData.map((ride) => (
-              <Card key={ride.id} className="overflow-hidden bg-white shadow-sm rounded-xl-kole border-kole-border">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-1.5">
-                    <p className="text-xs text-kole-text-secondary">{ride.date}</p>
-                    <p className="text-base font-semibold text-kole-blue-primary">{ride.price}</p>
-                  </div>
 
-                  <div className="mb-1">
-                    <p className="text-sm text-kole-text-secondary">
-                      Départ: <span className="font-medium text-kole-text-primary">{ride.pickup}</span>
-                    </p>
-                    <p className="text-sm text-kole-text-secondary">
-                      Arrivée: <span className="font-medium text-kole-text-primary">{ride.destination}</span>
-                    </p>
+      <ScrollArea className="flex-1 p-4">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full">
+            <Loader2 className="h-12 w-12 animate-spin text-kole-blue-primary mb-4" />
+            <p className="text-kole-text-secondary">{t('clientRideHistoryPage.loadingHistory')}</p>
+          </div>
+        ) : rides.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <AlertTriangle className="h-16 w-16 text-kole-text-tertiary mb-4" />
+            <h2 className="text-xl font-semibold text-kole-text-primary mb-2">{t('clientRideHistoryPage.emptyStateTitle')}</h2>
+            <p className="text-kole-text-secondary">{t('clientRideHistoryPage.emptyStateSubtitle')}</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {rides.map((ride) => (
+              <Card key={ride.id} className="kole-card border-kole-border overflow-hidden">
+                <CardHeader className="p-4 bg-kole-cream-light border-b border-kole-border">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-sm font-semibold text-kole-text-primary">
+                      {t('clientRideHistoryPage.labels.date')}: {ride.date}
+                    </CardTitle>
+                    <RideStatusBadge statusKey={ride.statusKey} />
                   </div>
-                  
-                  <p className="text-sm text-kole-text-secondary">
-                    Chauffeur: <span className="font-medium text-kole-text-primary">{ride.driverName}</span>
-                  </p>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start">
+                    <MapPin className="h-4 w-4 text-kole-orange-primary mr-2.5 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-kole-text-tertiary uppercase tracking-wider">{t('clientRideHistoryPage.labels.pickup')}</p>
+                      <p className="text-sm text-kole-text-primary font-medium">{ride.pickup}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start">
+                    <MapPin className="h-4 w-4 text-kole-green-dark mr-2.5 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-kole-text-tertiary uppercase tracking-wider">{t('clientRideHistoryPage.labels.destination')}</p>
+                      <p className="text-sm text-kole-text-primary font-medium">{ride.destination}</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-kole-border my-2"></div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Avatar className="h-6 w-6 mr-2">
+                        <AvatarImage src={ride.driverAvatarUrl} alt={ride.driverName} />
+                        <AvatarFallback className="text-xs bg-kole-blue-primary text-white">
+                          {ride.driverName.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <p className="text-sm text-kole-text-secondary">{t('clientRideHistoryPage.labels.driver')}: <span className="font-medium text-kole-text-primary">{ride.driverName}</span></p>
+                    </div>
+                    <p className="text-sm text-kole-text-secondary">{t('clientRideHistoryPage.labels.price')}: <span className="font-bold text-kole-text-primary">{ride.price}</span></p>
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        </ScrollArea>
-      ) : (
-        <div className="flex-grow flex flex-col items-center justify-center text-center p-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <p className="text-kole-text-secondary text-lg">Aucun trajet pour le moment.</p>
-          <p className="text-sm text-kole-text-tertiary mt-1">Vos courses passées s’afficheront ici.</p>
+        )}
+      </ScrollArea>
+
+      {totalPages > 0 && !isLoading && (
+        <div className="p-4 border-t border-kole-border bg-white flex items-center justify-between sticky bottom-16 md:bottom-0">
+          <Button
+            variant="outline"
+            className="kole-btn-outline"
+            onClick={handlePreviousPage}
+            disabled={currentPage <= 1 || isLoading}
+          >
+            {t('clientRideHistoryPage.pagination.previous')}
+          </Button>
+          <span className="text-sm text-kole-text-secondary">
+            {t('clientRideHistoryPage.pagination.pageInfo', { currentPage, totalPages })}
+          </span>
+          <Button
+            variant="outline"
+            className="kole-btn-outline"
+            onClick={handleNextPage}
+            disabled={currentPage >= totalPages || isLoading}
+          >
+            {t('clientRideHistoryPage.pagination.next')}
+          </Button>
         </div>
       )}
       <ClientBottomNavBar />
@@ -94,4 +169,3 @@ const ClientRideHistoryPage: React.FC = () => {
 };
 
 export default ClientRideHistoryPage;
-

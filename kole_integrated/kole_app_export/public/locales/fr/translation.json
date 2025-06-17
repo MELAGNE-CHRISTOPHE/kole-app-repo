@@ -23,6 +23,7 @@
       "invalidCredentials": "Email ou mot de passe incorrect.",
       "invalidEmailFormat": "Le format de l'email n'est pas valide.",
       "tooManyRequests": "Trop de tentatives de connexion. Veuillez réessayer plus tard.",
+      "networkError": "Un problème de réseau est survenu. Veuillez vérifier votre connexion et réessayer.",
       "genericError": "Une erreur est survenue lors de la connexion. Veuillez réessayer."
     }
   },
@@ -98,6 +99,7 @@
       "emailInUse": "Cet email est déjà utilisé par un autre compte.",
       "invalidEmail": "Le format de l'email n'est pas valide.",
       "weakPassword": "Le mot de passe est trop faible.",
+      "networkError": "Un problème de réseau est survenu. Veuillez vérifier votre connexion et réessayer.",
       "generic": "Une erreur est survenue lors de l'inscription. Veuillez réessayer."
     }
   },
@@ -139,7 +141,9 @@
       "noVerificationSession": "Session de vérification non trouvée. Veuillez renvoyer le code.",
       "verifyOtpFailed": "Une erreur est survenue lors de la vérification du code. Veuillez réessayer.",
       "invalidOtpCodeFb": "Le code de vérification est invalide ou a expiré.",
-      "otpCodeExpiredFb": "Le code de vérification a expiré. Veuillez renvoyer un code."
+      "otpCodeExpiredFb": "Le code de vérification a expiré. Veuillez renvoyer un code.",
+      "networkErrorSendOtp": "Un problème de réseau est survenu lors de l'envoi du code. Veuillez réessayer.",
+      "networkErrorVerifyOtp": "Un problème de réseau est survenu lors de la vérification du code. Veuillez réessayer."
     }
   },
   "forgotPasswordPage": {
@@ -189,5 +193,200 @@
     "priceLabel": "Prix",
     "durationLabel": "Durée Estimée",
     "priceFormat": "{{price}} FCFA"
+  },
+  "errors": {
+    "geolocationFailed": "Impossible d'obtenir votre position. Veuillez vérifier vos paramètres de localisation et réessayer.",
+    "geolocationPermissionDenied": "L'accès à votre position a été refusé. Veuillez l'autoriser dans les paramètres de votre navigateur.",
+    "geolocationPositionUnavailable": "Votre position actuelle n'est pas disponible. Veuillez réessayer.",
+    "geolocationTimeout": "La demande de géolocalisation a expiré. Veuillez réessayer."
+  },
+  "mapService": {
+    "errors": {
+      "misconfigured": "Service de cartographie mal configuré. Veuillez contacter le support.",
+      "reverseGeocodeFailed": "Impossible de trouver une adresse pour cette position. Veuillez réessayer.",
+      "noAddressFound": "Aucune adresse trouvée pour cette position.",
+      "geocodeFailed": "Adresse introuvable. Veuillez vérifier l'adresse et réessayer.",
+      "noCoordinatesFound": "Aucune coordonnée trouvée pour cette adresse.",
+      "directionsFailed": "Impossible de calculer l'itinéraire. Veuillez réessayer plus tard.",
+      "noRoutesFound": "Aucun itinéraire trouvé pour les emplacements spécifiés.",
+      "networkError": "Un problème de réseau est survenu avec le service de cartographie. Veuillez vérifier votre connexion et réessayer.",
+      "autocompleteFailed": "La recherche d'adresse a échoué. Veuillez réessayer."
+    }
+  },
+  "clientBookingPage": {
+    "title": "Commander un Kôlê",
+    "labels": {
+      "from": "Départ",
+      "to": "Destination",
+      "estimatedPrice": "Prix estimé",
+      "estimatedTime": "Temps estimé"
+    },
+    "placeholders": {
+      "destination": "Où allez-vous ?"
+    },
+    "buttons": {
+      "bookNow": "Commander maintenant",
+      "submittingRequest": "Envoi de la demande..."
+    },
+    "markerTitles": {
+      "pickup": "Départ",
+      "destination": "Destination"
+    },
+    "currentLocationDefault": "Position actuelle (non spécifiée)",
+    "defaultLocationName": "Position par défaut (Abidjan)",
+    "loadingMap": "Chargement de la carte et de la position...",
+    "loadingRoute": "Calcul de l'itinéraire...",
+    "loadingAddress": "Recherche de l'adresse...",
+    "destinationNotGeocoded": "Destination (non vérifiée)",
+    "destinationNotSet": "Destination non définie",
+    "priceUnavailable": "N/A",
+    "timeUnavailable": "N/A",
+    "rideDetailsTitle": "Détails du trajet",
+    "errors": {
+      "selectDestination": "Veuillez rechercher et sélectionner une destination valide avant de commander."
+    }
+  },
+  "userService": {
+    "errors": {
+      "fetchProfileFailed": "Impossible de charger votre profil. Veuillez réessayer.",
+      "logoutFailed": "La déconnexion a échoué. Veuillez réessayer.",
+      "fetchWalletDetailsFailed": "Impossible de récupérer le solde de votre portefeuille.",
+      "fetchTransactionsFailed": "Impossible de récupérer l'historique de vos transactions."
+    }
+  },
+  "clientProfilePage": {
+    "title": "Mon Profil",
+    "loadingProfile": "Chargement du profil...",
+    "editInfo": "Modifier mes informations",
+    "notificationPrefs": "Préférences de notification",
+    "managePayments": "Gérer les paiements",
+    "helpSupport": "Aide et Support",
+    "aboutKole": "À propos de Kôlê",
+    "logout": "Se déconnecter",
+    "loggingOut": "Déconnexion en cours...",
+    "logoutSuccess": "Vous avez été déconnecté avec succès.",
+    "initialsFallback": "{{initial1}}{{initial2}}",
+    "avatarAlt": "Avatar de {{name}}"
+  },
+  "rideService": {
+    "errors": {
+      "fetchHistoryFailed": "Impossible de charger l'historique des trajets.",
+      "requestRideFailed": "La demande de course a échoué. Veuillez réessayer.",
+      "getBookingStatusFailed": "Impossible de vérifier le statut de votre course.",
+      "cancelRideFailed": "L'annulation de la course a échoué.",
+      "bookingNotFound": "Détails de la réservation introuvables.",
+      "submitRatingFailed": "L'envoi de votre évaluation a échoué. Veuillez réessayer."
+    },
+    "success": {
+      "rideCancelled": "Votre demande de course a été annulée.",
+      "ratingSubmitted": "Merci pour votre évaluation !"
+    }
+  },
+  "clientRideHistoryPage": {
+    "title": "Mes trajets",
+    "loadingHistory": "Chargement de l'historique...",
+    "filterButtonLabel": "Filtrer les trajets",
+    "emptyStateTitle": "Aucun trajet pour le moment",
+    "emptyStateSubtitle": "Vos courses passées s’afficheront ici.",
+    "pagination": {
+      "previous": "Précédent",
+      "next": "Suivant",
+      "pageInfo": "Page {{currentPage}} sur {{totalPages}}"
+    },
+    "labels": {
+      "pickup": "Départ",
+      "destination": "Arrivée",
+      "driver": "Chauffeur",
+      "status": "Statut",
+      "price": "Prix",
+      "date": "Date"
+    }
+  },
+  "rideStatuses": {
+    "completed": "Terminé",
+    "cancelled": "Annulé",
+    "in_progress": "En cours",
+    "pending": "En attente",
+    "driver_assigned": "Chauffeur assigné",
+    "driver_arrived": "Chauffeur arrivé"
+  },
+  "clientSearchingDriverPage": {
+    "titleSearching": "Recherche de chauffeur...",
+    "titleFound": "Chauffeur trouvé !",
+    "loadingMessage": "Recherche du chauffeur le plus proche",
+    "pleaseWait": "Veuillez patienter pendant que nous trouvons un chauffeur...",
+    "searchTime": "Temps de recherche: {{time}}s",
+    "driverFoundMessage": "Chauffeur trouvé !",
+    "driverArrivalTime": "{{name}} arrive dans {{time}}",
+    "autoRedirect": "Redirection automatique...",
+    "cancelSearchButton": "Annuler la recherche",
+    "cancellingSearch": "Annulation en cours...",
+    "searchErrorTitle": "Erreur de recherche"
+  },
+  "clientTrackRidePage": {
+    "titleToClient": "Chauffeur en route",
+    "titleWaiting": "Chauffeur arrivé",
+    "titleInProgress": "En route vers la destination",
+    "titleArrived": "Arrivé à destination",
+    "statusMessageToClient": "{{driverName}} arrive dans {{eta}}",
+    "statusMessageWaiting": "{{driverName}} est arrivé et vous attend.",
+    "statusMessageInProgress": "En route vers {{destinationAddress}} (arrivée ~{{eta}})",
+    "statusMessageArrived": "Vous êtes arrivé à {{destinationAddress}}!",
+    "confirmPresenceButton": "Je suis présent, démarrer la course",
+    "waitingTimeLabel": "Temps d'attente",
+    "extraChargeLabel": "Frais d'attente",
+    "totalPriceLabel": "Prix total",
+    "callDriverLabel": "Appeler {{driverName}}",
+    "messageDriverLabel": "Message à {{driverName}}",
+    "defaultPickup": "Position de prise en charge",
+    "defaultDestination": "Destination finale"
+  },
+  "clientRateRidePage": {
+    "pageTitle": "Évaluer votre trajet",
+    "cardTitle": "Comment s'est passé votre trajet ?",
+    "driverIntro": "Avec {{driverName}}",
+    "commentPlaceholder": "Commentaires additionnels (optionnel)...",
+    "buttons": {
+      "submitRating": "Soumettre l'évaluation",
+      "submittingRating": "Envoi en cours...",
+      "modalClose": "Super !"
+    },
+    "rideDetailsTitle": "Détails du trajet",
+    "baseFareLabel": "Tarif de base",
+    "waitingFeeLabel": "Frais d'attente",
+    "totalLabel": "Total",
+    "validation": {
+        "ratingRequired": "Veuillez sélectionner une note."
+    }
+  },
+  "clientSearch": {
+    "noResults": "Aucun résultat trouvé pour '{{query}}'.",
+    "loadingSuggestions": "Chargement des suggestions..."
+  },
+  "clientWalletPage": {
+    "title": "Mon Portefeuille Kôlê",
+    "loadingBalance": "Chargement du solde...",
+    "balanceLabel": "Solde actuel :",
+    "balanceFormat": "{{balance}} FCFA",
+    "rechargeButton": "Recharger mon portefeuille",
+    "transactionsTitle": "Historique des transactions",
+    "loadingTransactions": "Chargement des transactions...",
+    "emptyTransactions": "Aucune transaction pour le moment.",
+    "transactionTypeCredit": "Crédit",
+    "transactionTypeDebit": "Débit",
+    "pagination": {
+      "previous": "Précédent",
+      "next": "Suivant",
+      "pageInfo": "Page {{currentPage}} sur {{totalPages}}"
+    }
+  },
+  "paymentService": {
+    "errors": {
+      "topUpFailedGeneric": "La tentative de recharge a échoué. Veuillez réessayer.",
+      "operatorTemporarilyUnavailable": "Le service pour {{operator}} est temporairement indisponible."
+    },
+    "success": {
+      "topUpInitiated": "Recharge de {{amount}} FCFA initiée avec succès ! Suivez les instructions sur votre téléphone."
+    }
   }
 }

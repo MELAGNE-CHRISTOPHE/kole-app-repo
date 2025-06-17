@@ -1,314 +1,343 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
-import { MapPin, Navigation, ArrowLeft, Search } from 'lucide-react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-
-// Configuration de Mapbox
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY || 'pk.eyJ1Ijoia29sZWFwcCIsImEiOiJjbHpzOWdwcXUwMXpqMnFwYTJkNjRlYmRuIn0.VD7jlOAfuReKlMRAm7c47g';
+import { MapPin, Navigation, ArrowLeft, Search, Loader2 } from 'lucide-react';
+import MapComponent, { Marker as MapMarker } from '../../components/MapComponent'; // Renamed to avoid conflict
+import * as mapService from '../../services/mapService';
+import * as rideService from '../../services/rideService';
+import { useTranslation } from 'react-i18next';
+import RideInfoCard from '../../components/client/RideInfoCard';
+import { toast } from 'sonner';
+import { debounce } from '../../utils/debounce'; // Import debounce
 
 const ClientBookingPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
-  const initialDestination = location.state?.destination || '';
+  const locationHook = useLocation();
   
+  const initialDestinationQuery = locationHook.state?.destination || '';
+  const initialDestinationCoords = locationHook.state?.destinationCoordinates || null;
+
   const [clientLocation, setClientLocation] = useState<{latitude: number, longitude: number} | null>(null);
-  const [destinationQuery, setDestinationQuery] = useState(initialDestination);
-  const [pickupAddress, setPickupAddress] = useState('Ma position actuelle');
+  const [destinationQuery, setDestinationQuery] = useState(initialDestinationQuery);
+  const [pickupAddress, setPickupAddress] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
-  const [mapLoaded, setMapLoaded] = useState(false);
+
   const [estimatedPrice, setEstimatedPrice] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState('');
-  const [destinationCoordinates, setDestinationCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
-  
+  const [destinationCoordinates, setDestinationCoordinates] = useState<{latitude: number, longitude: number} | null>(initialDestinationCoords);
+  const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
+
+  const [isGeocodingPickup, setIsGeocodingPickup] = useState(true);
+  const [isGeocodingDestination, setIsGeocodingDestination] = useState(false);
+  const [isDirectionsLoading, setIsDirectionsLoading] = useState(false);
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+
+  const [suggestions, setSuggestions] = useState<mapService.MapboxFeature[]>([]);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+  // No selectedDestination state needed here as selection directly sets coordinates/address
+
   useEffect(() => {
-    // Obtenir la position actuelle du client
+    setIsGeocodingPickup(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
           setClientLocation({ latitude, longitude });
-          
-          // Obtenir l'adresse du client par géocodage inverse
-          reverseGeocode(latitude, longitude)
-            .then(address => {
-              if (address) setPickupAddress(address);
-            });
-          
-          // Si une destination est déjà spécifiée, la géocoder
-          if (initialDestination) {
-            geocodeDestination(initialDestination);
+          const result = await mapService.reverseGeocode(latitude, longitude);
+          if (result.data) setPickupAddress(result.data.address);
+          else {
+            toast.error(t(result.error?.messageKey || 'mapService.errors.reverseGeocodeFailed'));
+            setPickupAddress(t('clientBookingPage.currentLocationDefault'));
           }
+          setIsGeocodingPickup(false);
         },
-        (error) => {
+        (error) => { /* ... existing error handling ... */
           console.error('Erreur de géolocalisation:', error);
+          setClientLocation({ latitude: 5.3600, longitude: -4.0083 });
+          setPickupAddress(t('clientBookingPage.defaultLocationName'));
+          setIsGeocodingPickup(false);
+          switch (error.code) {
+            case error.PERMISSION_DENIED: toast.error(t('errors.geolocationPermissionDenied')); break;
+            case error.POSITION_UNAVAILABLE: toast.error(t('errors.geolocationPositionUnavailable')); break;
+            case error.TIMEOUT: toast.error(t('errors.geolocationTimeout')); break;
+            default: toast.error(t('errors.geolocationFailed')); break;
+          }
         }
       );
+    } else { /* ... existing error handling ... */
+      toast.error(t('errors.geolocationUnavailable'));
+      setClientLocation({ latitude: 5.3600, longitude: -4.0083 });
+      setPickupAddress(t('clientBookingPage.defaultLocationName'));
+      setIsGeocodingPickup(false);
     }
-  }, [initialDestination]);
-  
-  // Effet pour initialiser la carte une fois les deux positions connues
+
+    if (initialDestinationQuery && !initialDestinationCoords) {
+      handleGeocodeDestination(initialDestinationQuery, false); // Geocode if only text is passed
+    } else if (initialDestinationCoords && initialDestinationQuery) {
+        setDestinationAddress(initialDestinationQuery); // Assume query is the place_name if coords are passed
+    }
+  }, [initialDestinationQuery, initialDestinationCoords, t]);
+
   useEffect(() => {
     if (clientLocation && destinationCoordinates) {
-      initializeMap(clientLocation, destinationCoordinates);
+      fetchAndSetRouteDetails(
+        [clientLocation.longitude, clientLocation.latitude],
+        [destinationCoordinates.longitude, destinationCoordinates.latitude]
+      );
+    } else {
+      // Clear route if either location is missing
+      setRouteGeoJSON(null);
+      setEstimatedPrice(0);
+      setEstimatedTime('');
     }
   }, [clientLocation, destinationCoordinates]);
   
-  // Géocodage inverse pour obtenir l'adresse à partir des coordonnées
-  const reverseGeocode = async (latitude: number, longitude: number): Promise<string | null> => {
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxgl.accessToken}`
-      );
-      const data = await response.json();
-      
-      if (data.features && data.features.length > 0) {
-        return data.features[0].place_name;
+  const debouncedFetchSuggestions = useCallback(
+    debounce(async (query: string) => {
+      if (query.length < 3) {
+        setSuggestions([]);
+        setIsSuggestionsLoading(false);
+        return;
       }
-      return null;
-    } catch (error) {
-      console.error('Erreur de géocodage inverse:', error);
-      return null;
-    }
-  };
-  
-  // Géocodage pour obtenir les coordonnées à partir d'une adresse
-  const geocodeDestination = async (address: string) => {
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${mapboxgl.accessToken}`
-      );
-      const data = await response.json();
-      
-      if (data.features && data.features.length > 0) {
-        const [longitude, latitude] = data.features[0].center;
-        setDestinationCoordinates({ latitude, longitude });
-        setDestinationAddress(data.features[0].place_name);
+      setIsSuggestionsLoading(true);
+      const proximity = clientLocation ? { latitude: clientLocation.latitude, longitude: clientLocation.longitude } : undefined;
+      const result = await mapService.getPlaceAutocomplete(query, proximity);
+      if (result.data) {
+        setSuggestions(result.data);
+      } else if (result.error) {
+        toast.error(t(result.error.messageKey));
+        setSuggestions([]);
       }
-    } catch (error) {
-      console.error('Erreur de géocodage:', error);
+      setIsSuggestionsLoading(false);
+    }, 500),
+    [clientLocation, t]
+  );
+
+  useEffect(() => {
+    if (destinationQuery.length > 0 && destinationQuery !== destinationAddress) { // Fetch only if query changed and not from selection
+        debouncedFetchSuggestions(destinationQuery);
+    } else if (destinationQuery.length < 3) {
+        setSuggestions([]);
     }
-  };
-  
-  // Initialisation de la carte avec itinéraire
-  const initializeMap = (start: {latitude: number, longitude: number}, end: {latitude: number, longitude: number}) => {
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) return;
+  }, [destinationQuery, destinationAddress, debouncedFetchSuggestions]);
+
+
+  const handleGeocodeDestination = async (address: string, shouldClearSuggestions = true) => {
+    if (!address.trim()) return;
+    setIsGeocodingDestination(true);
+    if (shouldClearSuggestions) setSuggestions([]); // Clear suggestions when explicitly geocoding
     
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/mapbox/streets-v11',
-      center: [start.longitude, start.latitude],
-      zoom: 12
-    });
-    
-    map.on('load', () => {
-      // Ajouter les marqueurs
-      new mapboxgl.Marker({ color: '#0052FF' })
-        .setLngLat([start.longitude, start.latitude])
-        .addTo(map);
-        
-      new mapboxgl.Marker({ color: '#FF8C00' })
-        .setLngLat([end.longitude, end.latitude])
-        .addTo(map);
-      
-      // Ajuster la vue pour voir les deux points
-      const bounds = new mapboxgl.LngLatBounds()
-        .extend([start.longitude, start.latitude])
-        .extend([end.longitude, end.latitude]);
-      
-      map.fitBounds(bounds, {
-        padding: 100
-      });
-      
-      // Tracer l'itinéraire
-      getRoute(map, [start.longitude, start.latitude], [end.longitude, end.latitude]);
-      
-      setMapLoaded(true);
-    });
-  };
-  
-  // Obtenir et afficher l'itinéraire
-  const getRoute = async (map: mapboxgl.Map, start: [number, number], end: [number, number]) => {
-    try {
-      const query = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
-      );
-      const json = await query.json();
-      const data = json.routes[0];
-      const route = data.geometry.coordinates;
-      
-      // Calculer le prix estimé (basé sur la distance)
-      if (data.distance) {
-        const distanceKm = data.distance / 1000;
-        const basePrice = 300; // Prix de base en FCFA
-        const pricePerKm = 100; // Prix par km en FCFA
-        const estimatedPrice = Math.round(basePrice + (distanceKm * pricePerKm));
-        setEstimatedPrice(estimatedPrice);
-      }
-      
-      // Calculer le temps estimé
-      if (data.duration) {
-        const minutes = Math.round(data.duration / 60);
-        setEstimatedTime(`${minutes} min`);
-      }
-      
-      // Ajouter la source de données pour l'itinéraire
-      if (!map.getSource('route')) {
-        map.addSource('route', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            properties: {},
-            geometry: {
-              type: 'LineString',
-              coordinates: route
-            }
-          }
-        });
-        
-        // Ajouter la couche pour afficher l'itinéraire
-        map.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#0052FF',
-            'line-width': 5,
-            'line-opacity': 0.75
-          }
-        });
-      } else {
-        // Mettre à jour l'itinéraire existant
-        map.getSource('route').setData({
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: route
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Erreur lors de la récupération de l'itinéraire:", error);
+    const result = await mapService.geocodeAddress(address);
+    if (result.data) {
+      setDestinationCoordinates({ latitude: result.data.latitude, longitude: result.data.longitude });
+      setDestinationAddress(result.data.placeName);
+      setDestinationQuery(result.data.placeName); // Update query to reflect geocoded name
+    } else if (result.error) {
+      toast.error(t(result.error.messageKey, { details: result.error.details }));
+      setDestinationAddress('');
+      setDestinationCoordinates(null); // Clear coordinates on error
     }
+    setIsGeocodingDestination(false);
   };
   
-  // Rechercher une destination
-  const handleSearch = () => {
-    if (destinationQuery.trim()) {
-      geocodeDestination(destinationQuery);
+  const fetchAndSetRouteDetails = async (start: [number, number], end: [number, number]) => {
+    setIsDirectionsLoading(true);
+    setRouteGeoJSON(null); // Clear previous route
+    setEstimatedPrice(0);
+    setEstimatedTime('');
+
+    const result = await mapService.getMapboxDirections(start, end);
+    if (result.data) {
+      setRouteGeoJSON(result.data.geometry);
+      if (result.data.distance) {
+        const distanceKm = result.data.distance / 1000;
+        const basePrice = 300;
+        const pricePerKm = 100;
+        setEstimatedPrice(Math.round(basePrice + (distanceKm * pricePerKm)));
+      }
+      if (result.data.duration) {
+        setEstimatedTime(`${Math.round(result.data.duration / 60)} min`);
+      }
+    } else if (result.error) {
+      toast.error(t(result.error.messageKey, { details: result.error.details }));
     }
+    setIsDirectionsLoading(false);
   };
   
-  // Commander un trajet
-  const bookRide = () => {
-    if (clientLocation && destinationCoordinates) {
-      navigate('/client/searching-driver', {
-        state: {
-          pickup: {
-            coordinates: clientLocation,
-            address: pickupAddress
-          },
-          destination: {
-            coordinates: destinationCoordinates,
-            address: destinationAddress
-          },
-          price: estimatedPrice,
-          estimatedTime: estimatedTime
-        }
-      });
+  const handleSearch = () => { // Triggered by search button
+    handleGeocodeDestination(destinationQuery);
+  };
+
+  const handleSuggestionClick = (suggestion: mapService.MapboxFeature) => {
+    setDestinationQuery(suggestion.place_name); // Update input field
+    setDestinationAddress(suggestion.place_name); // Set formatted address
+    setDestinationCoordinates({ longitude: suggestion.center[0], latitude: suggestion.center[1] });
+    setSuggestions([]); // Clear suggestions
+    // Route fetching will be triggered by useEffect watching destinationCoordinates
+  };
+  
+  const bookRide = async () => {
+    if (clientLocation && destinationCoordinates && destinationAddress && pickupAddress && routeGeoJSON) { // Ensure route is calculated
+      setIsSubmittingBooking(true);
+      const rideRequestData: rideService.RideRequestData = {
+        pickup: { coordinates: clientLocation, address: pickupAddress },
+        destination: { coordinates: destinationCoordinates, address: destinationAddress },
+        price: estimatedPrice,
+        estimatedTime: estimatedTime,
+      };
+      const result = await rideService.requestRide(rideRequestData);
+      if (result.error) {
+        toast.error(t(result.error.messageKey, { details: result.error.details }));
+      } else if (result.data) {
+        navigate('/client/searching-driver', {
+          state: {
+            rideDetails: rideRequestData,
+            bookingId: result.data.bookingId,
+          }
+        });
+      }
+      setIsSubmittingBooking(false);
+    } else {
+      toast.error(t('clientBookingPage.errors.selectDestination'));
     }
   };
 
+  const markers: MapMarker[] = [];
+  if (clientLocation) {
+    markers.push({ id: 'pickup', latitude: clientLocation.latitude, longitude: clientLocation.longitude, color: '#0052FF', title: t('clientBookingPage.markerTitles.pickup') });
+  }
+  if (destinationCoordinates) {
+    markers.push({ id: 'destination', latitude: destinationCoordinates.latitude, longitude: destinationCoordinates.longitude, color: '#FF8C00', title: t('clientBookingPage.markerTitles.destination') });
+  }
+
   return (
-    <div className="flex flex-col h-screen bg-kole-cream-bg"> {/* Standard Kôlê page background */}
-      {/* Barre d'état supérieure */}
+    <div className="flex flex-col h-screen bg-kole-cream-bg">
       <div className="bg-white shadow-sm p-4 flex items-center">
-        <button onClick={() => navigate('/client')} className="mr-4 p-2 rounded-full hover:bg-kole-hover-bg"> {/* Hover effect */}
-          <ArrowLeft className="h-5 w-5 text-kole-text-primary" /> {/* Icon color standardized */}
+        <button onClick={() => navigate('/client')} className="mr-4 p-2 rounded-full hover:bg-kole-hover-bg">
+          <ArrowLeft className="h-5 w-5 text-kole-text-primary" />
         </button>
-        <h1 className="text-lg font-semibold text-kole-text-primary">Commander un Kôlê</h1> {/* Text color standardized */}
+        <h1 className="text-lg font-semibold text-kole-text-primary">{t('clientBookingPage.title')}</h1>
       </div>
       
-      {/* Barre de recherche */}
       <div className="bg-white p-4 shadow-sm">
         <div className="flex gap-2 mb-3">
           <div className="flex-none pt-2">
-            <MapPin className="h-5 w-5 text-kole-blue-primary" /> {/* Icon color standardized */}
+            <MapPin className="h-5 w-5 text-kole-blue-primary" />
           </div>
           <div className="flex-1">
-            <p className="text-sm text-kole-text-secondary">Départ</p> {/* Text color standardized */}
-            <p className="font-medium truncate text-kole-text-primary">{pickupAddress}</p> {/* Ensure primary text color */}
+            <p className="text-sm text-kole-text-secondary">{t('clientBookingPage.labels.from')}</p>
+            {isGeocodingPickup ? (
+              <p className="font-medium text-kole-text-secondary animate-pulse">{t('clientBookingPage.loadingAddress')}</p>
+            ) : (
+              <p className="font-medium truncate text-kole-text-primary" title={pickupAddress}>{pickupAddress}</p>
+            )}
           </div>
         </div>
-        
         <div className="flex gap-2">
           <div className="flex-none pt-2">
-            {/* Assuming kole-orange-primary or similar exists, otherwise use another theme color e.g. kole-accent */}
-            <Navigation className="h-5 w-5 text-kole-orange-primary" /> {/* Icon color standardized */}
+            <Navigation className="h-5 w-5 text-kole-orange-primary" />
           </div>
-          <div className="flex-1">
-            <p className="text-sm text-kole-text-secondary">Destination</p> {/* Text color standardized */}
+          <div className="flex-1 relative"> {/* Added relative for suggestions positioning */}
+            <p className="text-sm text-kole-text-secondary">{t('clientBookingPage.labels.to')}</p>
             <div className="flex gap-2">
               <Input
-                placeholder="Où allez-vous ?"
+                placeholder={t('clientBookingPage.placeholders.destination')}
                 value={destinationQuery}
                 onChange={(e) => setDestinationQuery(e.target.value)}
-                className="flex-1 kole-input" /* Ensure kole-input styling */
+                className="flex-1 kole-input"
+                disabled={isGeocodingDestination || isDirectionsLoading}
               />
-              {/* Apply Kôlê button style, e.g., secondary or icon-specific */}
-              <Button onClick={handleSearch} className="kole-btn-secondary p-2.5 aspect-square"> {/* Made squarish */}
-                <Search className="h-5 w-5" /> {/* Adjusted size for consistency */}
+              <Button onClick={handleSearch} className="kole-btn-secondary p-2.5 aspect-square" disabled={isGeocodingDestination || isDirectionsLoading || !destinationQuery.trim()}>
+                {isGeocodingDestination ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
               </Button>
             </div>
+            {/* Suggestions List */}
+            {destinationQuery.length > 0 && suggestions.length > 0 && (
+              <Card className="absolute z-20 w-full mt-1 kole-card border-kole-border max-h-48 overflow-y-auto">
+                <CardContent className="p-0">
+                  {isSuggestionsLoading && (
+                    <div className="p-4 text-center text-kole-text-secondary flex items-center justify-center">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      {t('clientSearch.loadingSuggestions')}
+                    </div>
+                  )}
+                  {!isSuggestionsLoading && suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="flex items-center w-full text-left p-3 hover:bg-kole-hover-bg border-b border-kole-border last:border-b-0"
+                    >
+                      <MapPin className="h-4 w-4 text-kole-text-secondary mr-2.5 flex-shrink-0" />
+                      <span className="text-sm text-kole-text-primary truncate">{suggestion.place_name}</span>
+                    </button>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+            {isGeocodingDestination && !destinationAddress && destinationQuery.length > 0 && !suggestions.length && !isSuggestionsLoading && (
+                 <p className="text-xs text-kole-text-secondary mt-1">{t('clientBookingPage.loadingAddress')}</p>
+            )}
+             {!isSuggestionsLoading && !isGeocodingDestination && destinationQuery.length >=3 && suggestions.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">{t('clientSearch.noResults', {query: destinationQuery})}</p>
+            )}
           </div>
         </div>
       </div>
       
-      {/* Carte */}
       <div className="flex-1 relative">
-        {!mapLoaded ? (
-          <div className="flex-1 flex justify-center items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kole-blue-primary"></div> {/* Spinner color standardized */}
-            <p className="ml-3 text-kole-text-secondary">Chargement de l'itinéraire...</p> {/* Text color standardized */}
-          </div>
+        {clientLocation ? (
+          <MapComponent
+            latitude={clientLocation.latitude}
+            longitude={clientLocation.longitude}
+            zoom={11}
+            style={{ width: '100%', height: '100%' }}
+            interactive={true}
+            markers={markers}
+            route={destinationCoordinates && clientLocation ? {
+              origin: [clientLocation.longitude, clientLocation.latitude],
+              destination: [destinationCoordinates.longitude, destinationCoordinates.latitude]
+            } : undefined}
+            routeGeoJSON={routeGeoJSON}
+          />
         ) : (
-          <div id="map" className="w-full h-full" />
+          <div className="flex-1 flex justify-center items-center bg-kole-cream-light">
+             <Loader2 className="h-8 w-8 text-kole-blue-primary animate-spin mr-2" />
+            <p className="text-kole-brown-dark font-semibold">{t('clientBookingPage.loadingMap')}</p>
+          </div>
+        )}
+        {isDirectionsLoading && (
+             <div className="absolute inset-0 bg-kole-cream-light/70 flex justify-center items-center z-20">
+                <Loader2 className="h-8 w-8 text-kole-blue-primary animate-spin mr-2" />
+                <p className="ml-3 text-kole-text-secondary">{t('clientBookingPage.loadingRoute')}</p>
+            </div>
         )}
       </div>
       
-      {/* Panneau inférieur */}
-      {destinationCoordinates && (
-        <div className="bg-white border-t border-kole-border p-4"> {/* Border color standardized */}
-          <Card className="border-kole-border"> {/* Explicitly set border if Card default isn't Kôlê */}
+      {destinationCoordinates && !isDirectionsLoading && (
+        <div className="bg-white border-t border-kole-border p-4">
+          <Card className="border-kole-border">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-kole-text-primary">Détails du trajet</CardTitle> {/* Text color standardized */}
+              <CardTitle className="text-lg text-kole-text-primary">{t('clientBookingPage.rideDetailsTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex justify-between mb-4">
-                <div>
-                  <p className="text-sm text-kole-text-secondary">Prix estimé</p> {/* Text color standardized */}
-                  <p className="font-bold text-xl text-kole-text-primary">{estimatedPrice} FCFA</p> {/* Text color standardized */}
-                </div>
-                <div>
-                  <p className="text-sm text-kole-text-secondary">Temps estimé</p> {/* Text color standardized */}
-                  <p className="font-medium text-kole-text-primary">{estimatedTime}</p> {/* Text color standardized */}
-                </div>
-              </div>
-              
-              <Button 
-                className="w-full kole-btn-primary" /* Standard Kôlê primary button */
-                onClick={bookRide}
-              >
-                Commander maintenant
+              <RideInfoCard
+                pickupAddress={pickupAddress || t('clientBookingPage.currentLocationDefault')}
+                destinationAddress={destinationAddress || (destinationQuery ? t('clientBookingPage.destinationNotGeocoded') : t('clientBookingPage.destinationNotSet'))}
+                price={estimatedPrice > 0 ? estimatedPrice : t('clientBookingPage.priceUnavailable')}
+                estimatedTime={estimatedTime || t('clientBookingPage.timeUnavailable')}
+              />
+              <Button className="w-full kole-btn-primary mt-4" onClick={bookRide} disabled={!pickupAddress || !destinationAddress || isGeocodingPickup || isGeocodingDestination || !routeGeoJSON || isSubmittingBooking}>
+                {isSubmittingBooking ? (
+                  <span className="flex items-center justify-center">
+                    <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" />
+                    {t('clientBookingPage.buttons.submittingRequest')}
+                  </span>
+                ) : (
+                  t('clientBookingPage.buttons.bookNow')
+                )}
               </Button>
             </CardContent>
           </Card>

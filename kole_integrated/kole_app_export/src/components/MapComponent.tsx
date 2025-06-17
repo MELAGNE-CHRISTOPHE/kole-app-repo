@@ -12,8 +12,10 @@ export interface Marker {
   id: string;
   latitude: number;
   longitude: number;
-  color?: string;
+  color?: string; // Retained for default/other markers
   title?: string;
+  iconElement?: HTMLElement; // For fully custom HTML element markers
+  isKoleDriver?: boolean;   // Specific flag for Kôlê driver style
 }
 
 // Type pour l'état des marqueurs
@@ -115,23 +117,46 @@ const MapComponent: React.FC<MapComponentProps> = ({
       } 
       // Sinon, créer un nouveau marqueur
       else {
-        const element = document.createElement('div');
-        element.className = 'marker';
-        element.style.backgroundColor = marker.color || '#3FB1CE';
-        element.style.width = '20px';
-        element.style.height = '20px';
-        element.style.borderRadius = '50%';
-        element.style.border = '2px solid white';
-        element.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.3)';
-        
-        if (marker.title) {
-          element.title = marker.title;
+        let markerElement: HTMLElement | undefined = undefined;
+
+        if (marker.iconElement) {
+          markerElement = marker.iconElement;
+        } else if (marker.isKoleDriver) {
+          const el = document.createElement('div');
+          // Using the class defined in index.css for Kôlê driver (orange circle with white border)
+          // Alternatively, apply styles directly as per subtask if .kole-driver-map-icon is not preferred for some reason.
+          // el.style.backgroundColor = '#FF8C00'; // kole-orange-primary
+          // el.style.width = '20px';
+          // el.style.height = '20px';
+          // el.style.borderRadius = '50%';
+          // el.style.border = '2px solid white';
+          // el.style.boxShadow = '0 0 0 1px #FF8C00'; // Creates an outer ring effect
+          el.className = 'kole-driver-map-icon'; // Assumes this class provides the Kôlê orange dot style
+          // Ensure width/height are set by the class or override here if needed
+          // Forcing size here to ensure it's applied if CSS doesn't specify it for this generic class
+          el.style.width = '20px';
+          el.style.height = '20px';
+          markerElement = el;
+        } else { // Default marker
+          const el = document.createElement('div');
+          el.className = 'marker'; // Generic marker class
+          el.style.backgroundColor = marker.color || '#3FB1CE'; // Default blue if no color
+          el.style.width = '16px'; // Slightly smaller default
+          el.style.height = '16px';
+          el.style.borderRadius = '50%';
+          el.style.border = '2px solid white';
+          el.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.3)';
+          markerElement = el;
         }
         
-        const newMarker = new mapboxgl.Marker(element)
-          .setLngLat(position);
+        if (marker.title && markerElement) { // Add title if element exists
+          markerElement.title = marker.title;
+        }
+        
+        const newMarker = markerElement
+          ? new mapboxgl.Marker(markerElement).setLngLat(position)
+          : new mapboxgl.Marker({ color: marker.color || '#3FB1CE' }).setLngLat(position); // Fallback if no element
           
-        // Vérifier que map.current n'est pas null avant d'appeler addTo
         if (map.current) {
           newMarker.addTo(map.current);
         }
@@ -231,29 +256,30 @@ const MapComponent: React.FC<MapComponentProps> = ({
     // Si le marqueur du chauffeur existe déjà, mettre à jour sa position
     if (markersRef.current[driverMarkerId]) {
       const existingMarker = markersRef.current[driverMarkerId];
-      
-      // Ne mettre à jour que si la position a changé
       if (existingMarker.position[0] !== position[0] || existingMarker.position[1] !== position[1]) {
         existingMarker.marker.setLngLat(position);
         existingMarker.position = position;
       }
     } 
-    // Sinon, créer un nouveau marqueur pour le chauffeur
+    // Sinon, créer un nouveau marqueur pour le chauffeur (Kôlê style)
     else {
-      const element = document.createElement('div');
-      element.className = 'driver-marker';
-      element.style.backgroundColor = '#FF5722';
-      element.style.width = '24px';
-      element.style.height = '24px';
-      element.style.borderRadius = '50%';
-      element.style.border = '3px solid white';
-      element.style.boxShadow = '0 0 8px rgba(0, 0, 0, 0.5)';
-      element.title = 'Chauffeur';
+      const el = document.createElement('div');
+      // Using the class defined in index.css for Kôlê driver (orange circle with white border)
+      // el.style.backgroundColor = '#FF8C00'; // kole-orange-primary (driver tracking color, distinct from other 'kole drivers')
+      // el.style.width = '24px'; // Main driver can be slightly larger
+      // el.style.height = '24px';
+      // el.style.borderRadius = '50%';
+      // el.style.border = '3px solid white'; // Thicker border for prominence
+      // el.style.boxShadow = '0 0 8px rgba(0,0,0,0.6)';
+      el.className = 'kole-driver-map-icon'; // Main driver uses the same style as other Kôlê drivers
+      // Ensure width/height are set by the class or override here if needed
+      el.style.width = '24px'; // Make main driver marker slightly larger than other Kole drivers if they are 20px
+      el.style.height = '24px';
+      el.title = 'Votre Chauffeur'; // More specific title
       
-      const newMarker = new mapboxgl.Marker(element)
+      const newMarker = new mapboxgl.Marker(el)
         .setLngLat(position);
         
-      // Vérifier que map.current n'est pas null avant d'appeler addTo
       if (map.current) {
         newMarker.addTo(map.current);
       }
