@@ -13,19 +13,19 @@ import {
   User,
   Target
 } from 'lucide-react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import ClientBottomNavBar from '../../components/ClientBottomNavBar'; // Import ClientBottomNavBar
+// import mapboxgl from 'mapbox-gl'; // Removed direct mapbox-gl import
+// import 'mapbox-gl/dist/mapbox-gl.css'; // CSS should be handled by MapComponent or globally
+import ClientBottomNavBar from '../../components/ClientBottomNavBar';
+import MapComponent, { Marker } from '../../components/MapComponent'; // Import MapComponent and Marker type
 
-// Configuration de Mapbox
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY || 'pk.eyJ1Ijoia29sZWFwcCIsImEiOiJjbHpzOWdwcXUwMXpqMnFwYTJkNjRlYmRuIn0.VD7jlOAfuReKlMRAm7c47g';
+// Mapbox access token configuration is assumed to be handled within MapComponent or globally once.
 
 const ClientMainMapPage: React.FC = () => {
   const navigate = useNavigate();
   const [location, setLocation] = useState<{latitude: number, longitude: number} | null>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  // mapLoaded state is removed, MapComponent handles its own loading/rendering.
   const [searchQuery, setSearchQuery] = useState('');
-  const [nearbyDrivers, setNearbyDrivers] = useState(3);
+  const [nearbyDrivers, setNearbyDrivers] = useState(3); // This remains as it's UI state for an overlay
   
   useEffect(() => {
     // Obtenir la position actuelle du client
@@ -34,7 +34,7 @@ const ClientMainMapPage: React.FC = () => {
         (position) => {
           const { latitude, longitude } = position.coords;
           setLocation({ latitude, longitude });
-          initializeMap(latitude, longitude);
+          // initializeMap call removed, MapComponent will react to location prop changes
         },
         (error) => {
           console.error('Erreur de géolocalisation:', error);
@@ -42,53 +42,14 @@ const ClientMainMapPage: React.FC = () => {
           const defaultLat = 5.3600;
           const defaultLng = -4.0083;
           setLocation({ latitude: defaultLat, longitude: defaultLng });
-          initializeMap(defaultLat, defaultLng);
+          // initializeMap call removed
         }
       );
     }
-    
-    return () => {
-      if (mapLoaded) {
-        const mapContainer = document.getElementById('map');
-        if (mapContainer && mapContainer.firstChild) {
-          mapContainer.removeChild(mapContainer.firstChild);
-        }
-      }
-    };
-  }, []);
+    // Cleanup function for map instance is no longer needed here.
+  }, []); // Empty dependency array means this runs once on mount.
 
-  const initializeMap = (lat: number, lng: number) => {
-    try {
-      const map = new mapboxgl.Map({
-        container: 'map',
-        style: 'mapbox://styles/mapbox/light-v11',
-        center: [lng, lat],
-        zoom: 14
-      });
-
-      // Marqueur pour la position du client
-      new mapboxgl.Marker({ color: '#0052FF' })
-        .setLngLat([lng, lat])
-        .addTo(map);
-
-      // Ajouter quelques marqueurs de chauffeurs fictifs
-      const driverLocations = [
-        [lng + 0.01, lat + 0.01],
-        [lng - 0.01, lat + 0.005],
-        [lng + 0.005, lat - 0.01]
-      ];
-
-      driverLocations.forEach((coords) => {
-        new mapboxgl.Marker({ color: '#FF8C00' })
-          .setLngLat(coords)
-          .addTo(map);
-      });
-
-      setMapLoaded(true);
-    } catch (error) {
-      console.error('Erreur lors de l\'initialisation de la carte:', error);
-    }
-  };
+  // initializeMap function is removed.
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -102,20 +63,37 @@ const ClientMainMapPage: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-kole-cream-light">
-      {/* Carte principale selon les maquettes */}
+      {/* Carte principale */}
       <div className="flex-1 relative">
-        <div id="map" className="w-full h-full">
-          {!mapLoaded && (
-            <div className="w-full h-full bg-kole-cream-light flex items-center justify-center">
-              <div className="text-center text-kole-text-secondary">
-                <MapPin className="h-12 w-12 mx-auto mb-2 text-kole-blue-primary" />
-                <p className="text-kole-brown-dark font-semibold">Chargement de la carte...</p>
-              </div>
+        {location ? (
+          <MapComponent
+            latitude={location.latitude}
+            longitude={location.longitude}
+            zoom={14}
+            style={{ width: '100%', height: '100%' }}
+            interactive={true}
+            markers={[
+              { id: 'clientLocation', latitude: location.latitude, longitude: location.longitude, color: '#0052FF', title: 'Ma position' },
+              // Faked nearby driver markers (adjust coordinates as needed relative to actual client location)
+              { id: 'driver-1', latitude: location.latitude + 0.005, longitude: location.longitude + 0.005, color: '#FF8C00', title: 'Chauffeur Kôlê 1' },
+              { id: 'driver-2', latitude: location.latitude - 0.005, longitude: location.longitude + 0.003, color: '#FF8C00', title: 'Chauffeur Kôlê 2' },
+              { id: 'driver-3', latitude: location.latitude + 0.003, longitude: location.longitude - 0.005, color: '#FF8C00', title: 'Chauffeur Kôlê 3' },
+            ]}
+          />
+        ) : (
+          // Fallback content if location is not yet available (MapComponent typically handles its own loading state)
+          // For this refactor, we show a simple loading message similar to before,
+          // but MapComponent might have its own internal spinner.
+          <div className="w-full h-full bg-kole-cream-light flex items-center justify-center">
+            <div className="text-center text-kole-text-secondary">
+              {/* MapPin import might be removed if MapComponent handles all visual loading states */}
+              {/* <MapPin className="h-12 w-12 mx-auto mb-2 text-kole-blue-primary" /> */}
+              <p className="text-kole-brown-dark font-semibold">Chargement de la carte et de la position...</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Barre de recherche superposée selon les maquettes */}
+        {/* Barre de recherche superposée */}
         <div className="absolute top-4 left-4 right-4 z-10">
           {/* Ensure kole-card includes border-kole-border or add it explicitly if needed */}
           <Card className="kole-card border-kole-border">
@@ -148,8 +126,16 @@ const ClientMainMapPage: React.FC = () => {
           <Button
             className="w-12 h-12 rounded-full bg-white shadow-lg border border-kole-border hover:bg-kole-cream-light"
             onClick={() => {
-              if (location) {
-                initializeMap(location.latitude, location.longitude);
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                  (position) => {
+                    setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+                  },
+                  (error) => {
+                    console.error('Erreur de géolocalisation (recenter):', error);
+                    // Optionally set to default or show error to user via a toast/modal
+                  }
+                );
               }
             }}
           >
