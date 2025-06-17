@@ -182,5 +182,12 @@
       "codeSubmitted": "Code {{code}} soumis pour vérification (simulation).",
       "invalidOtp": "Veuillez entrer un code OTP valide à 6 chiffres."
     }
+  },
+  "rideInfoCard": {
+    "fromLabel": "De",
+    "toLabel": "À",
+    "priceLabel": "Prix",
+    "durationLabel": "Durée Estimée",
+    "priceFormat": "{{price}} FCFA"
   }
 }

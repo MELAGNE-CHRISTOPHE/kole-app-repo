@@ -229,42 +229,44 @@ const ClientBookingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-kole-cream-bg"> {/* Standard Kôlê page background */}
       {/* Barre d'état supérieure */}
       <div className="bg-white shadow-sm p-4 flex items-center">
-        <button onClick={() => navigate('/client')} className="mr-4">
-          <ArrowLeft className="h-5 w-5" />
+        <button onClick={() => navigate('/client')} className="mr-4 p-2 rounded-full hover:bg-kole-hover-bg"> {/* Hover effect */}
+          <ArrowLeft className="h-5 w-5 text-kole-text-primary" /> {/* Icon color standardized */}
         </button>
-        <h1 className="text-lg font-semibold text-gray-800">Commander un Kôlê</h1>
+        <h1 className="text-lg font-semibold text-kole-text-primary">Commander un Kôlê</h1> {/* Text color standardized */}
       </div>
       
       {/* Barre de recherche */}
       <div className="bg-white p-4 shadow-sm">
         <div className="flex gap-2 mb-3">
           <div className="flex-none pt-2">
-            <MapPin className="h-5 w-5 text-blue-500" />
+            <MapPin className="h-5 w-5 text-kole-blue-primary" /> {/* Icon color standardized */}
           </div>
           <div className="flex-1">
-            <p className="text-sm text-gray-500">Départ</p>
-            <p className="font-medium truncate">{pickupAddress}</p>
+            <p className="text-sm text-kole-text-secondary">Départ</p> {/* Text color standardized */}
+            <p className="font-medium truncate text-kole-text-primary">{pickupAddress}</p> {/* Ensure primary text color */}
           </div>
         </div>
         
         <div className="flex gap-2">
           <div className="flex-none pt-2">
-            <Navigation className="h-5 w-5 text-orange-500" />
+            {/* Assuming kole-orange-primary or similar exists, otherwise use another theme color e.g. kole-accent */}
+            <Navigation className="h-5 w-5 text-kole-orange-primary" /> {/* Icon color standardized */}
           </div>
           <div className="flex-1">
-            <p className="text-sm text-gray-500">Destination</p>
+            <p className="text-sm text-kole-text-secondary">Destination</p> {/* Text color standardized */}
             <div className="flex gap-2">
               <Input
                 placeholder="Où allez-vous ?"
                 value={destinationQuery}
                 onChange={(e) => setDestinationQuery(e.target.value)}
-                className="flex-1"
+                className="flex-1 kole-input" /* Ensure kole-input styling */
               />
-              <Button onClick={handleSearch}>
-                <Search className="h-4 w-4" />
+              {/* Apply Kôlê button style, e.g., secondary or icon-specific */}
+              <Button onClick={handleSearch} className="kole-btn-secondary p-2.5 aspect-square"> {/* Made squarish */}
+                <Search className="h-5 w-5" /> {/* Adjusted size for consistency */}
               </Button>
             </div>
           </div>
@@ -275,8 +277,8 @@ const ClientBookingPage: React.FC = () => {
       <div className="flex-1 relative">
         {!mapLoaded ? (
           <div className="flex-1 flex justify-center items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            <p className="ml-3">Chargement de l'itinéraire...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kole-blue-primary"></div> {/* Spinner color standardized */}
+            <p className="ml-3 text-kole-text-secondary">Chargement de l'itinéraire...</p> {/* Text color standardized */}
           </div>
         ) : (
           <div id="map" className="w-full h-full" />
@@ -285,25 +287,25 @@ const ClientBookingPage: React.FC = () => {
       
       {/* Panneau inférieur */}
       {destinationCoordinates && (
-        <div className="bg-white border-t border-gray-200 p-4">
-          <Card>
+        <div className="bg-white border-t border-kole-border p-4"> {/* Border color standardized */}
+          <Card className="border-kole-border"> {/* Explicitly set border if Card default isn't Kôlê */}
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Détails du trajet</CardTitle>
+              <CardTitle className="text-lg text-kole-text-primary">Détails du trajet</CardTitle> {/* Text color standardized */}
             </CardHeader>
             <CardContent>
               <div className="flex justify-between mb-4">
                 <div>
-                  <p className="text-sm text-gray-500">Prix estimé</p>
-                  <p className="font-bold text-xl">{estimatedPrice} FCFA</p>
+                  <p className="text-sm text-kole-text-secondary">Prix estimé</p> {/* Text color standardized */}
+                  <p className="font-bold text-xl text-kole-text-primary">{estimatedPrice} FCFA</p> {/* Text color standardized */}
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Temps estimé</p>
-                  <p className="font-medium">{estimatedTime}</p>
+                  <p className="text-sm text-kole-text-secondary">Temps estimé</p> {/* Text color standardized */}
+                  <p className="font-medium text-kole-text-primary">{estimatedTime}</p> {/* Text color standardized */}
                 </div>
               </div>
               
               <Button 
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="w-full kole-btn-primary" /* Standard Kôlê primary button */
                 onClick={bookRide}
               >
                 Commander maintenant

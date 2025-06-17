@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import ClientBottomNavBar from '../../components/ClientBottomNavBar'; // Import ClientBottomNavBar
 
 // Configuration de Mapbox
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY || 'pk.eyJ1Ijoia29sZWFwcCIsImEiOiJjbHpzOWdwcXUwMXpqMnFwYTJkNjRlYmRuIn0.VD7jlOAfuReKlMRAm7c47g';
@@ -116,7 +117,8 @@ const ClientMainMapPage: React.FC = () => {
 
         {/* Barre de recherche superposée selon les maquettes */}
         <div className="absolute top-4 left-4 right-4 z-10">
-          <Card className="kole-card">
+          {/* Ensure kole-card includes border-kole-border or add it explicitly if needed */}
+          <Card className="kole-card border-kole-border">
             <CardContent className="p-4">
               <div className="flex items-center space-x-3">
                 <Search className="h-5 w-5 text-kole-text-secondary" />
@@ -125,13 +127,15 @@ const ClientMainMapPage: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  className="border-none shadow-none text-lg font-medium placeholder:text-kole-text-secondary"
+                  // Ensuring input text color is primary if not default from kole-input base style
+                  className="border-none shadow-none text-lg font-medium text-kole-text-primary placeholder:text-kole-text-secondary"
                 />
                 <Button 
                   onClick={handleSearch}
-                  className="kole-btn-primary px-6"
+                  className="kole-btn-primary px-4 py-2.5 aspect-square" // Adjusted padding for a more squarish icon button
                 >
-                  <Navigation className="h-4 w-4" />
+                  {/* Ensure icon color contrasts with primary button background */}
+                  <Navigation className="h-5 w-5 text-white" />
                 </Button>
               </div>
             </CardContent>
@@ -140,6 +144,7 @@ const ClientMainMapPage: React.FC = () => {
 
         {/* Bouton de recentrage */}
         <div className="absolute bottom-24 right-4 z-10">
+          {/* Style seems Kôlê compliant, assuming it's the standard for such buttons */}
           <Button
             className="w-12 h-12 rounded-full bg-white shadow-lg border border-kole-border hover:bg-kole-cream-light"
             onClick={() => {
@@ -154,7 +159,8 @@ const ClientMainMapPage: React.FC = () => {
 
         {/* Informations sur les chauffeurs à proximité */}
         <div className="absolute top-20 left-4 z-10">
-          <Card className="kole-card">
+           {/* Ensure kole-card includes border-kole-border or add it explicitly */}
+          <Card className="kole-card border-kole-border">
             <CardContent className="p-3">
               <div className="text-center">
                 <div className="text-lg font-bold text-kole-brown-dark">{nearbyDrivers}</div>
@@ -166,13 +172,14 @@ const ClientMainMapPage: React.FC = () => {
 
         {/* Bouton de réservation rapide */}
         <div className="absolute bottom-24 left-4 right-4 z-10">
-          <Card className="kole-card">
+           {/* Ensure kole-card includes border-kole-border or add it explicitly */}
+          <Card className="kole-card border-kole-border">
             <CardContent className="p-4">
               <div className="text-center">
                 <p className="text-kole-text-secondary mb-3">Besoin d'un trajet ?</p>
                 <Button 
                   onClick={handleBookRide}
-                  className="kole-btn-primary w-full py-3 text-lg font-semibold"
+                  className="kole-btn-primary w-full py-3 text-lg font-semibold" // Already using kole-btn-primary
                 >
                   Commander un Kôlê maintenant
                 </Button>
@@ -182,25 +189,8 @@ const ClientMainMapPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation inférieure selon les maquettes */}
-      <div className="kole-bottom-nav">
-        <a href="/client" className="kole-nav-item active">
-          <Home className="h-5 w-5 mb-1" />
-          <span>Accueil</span>
-        </a>
-        <a href="/client/activity" className="kole-nav-item">
-          <Activity className="h-5 w-5 mb-1" />
-          <span>Activité</span>
-        </a>
-        <a href="/client/wallet" className="kole-nav-item">
-          <CreditCard className="h-5 w-5 mb-1" />
-          <span>Paiement</span>
-        </a>
-        <a href="/client/profile" className="kole-nav-item">
-          <User className="h-5 w-5 mb-1" />
-          <span>Profil</span>
-        </a>
-      </div>
+      {/* Reusable ClientBottomNavBar */}
+      <ClientBottomNavBar />
     </div>
   );
 };
