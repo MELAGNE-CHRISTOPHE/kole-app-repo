@@ -63,6 +63,9 @@ const LoginForm: React.FC = () => {
         case 'auth/too-many-requests':
           setError(t('loginForm.firebaseErrors.tooManyRequests'));
           break;
+        case 'auth/network-request-failed':
+          setError(t('loginForm.firebaseErrors.networkError'));
+          break;
         default:
           setError(t('loginForm.firebaseErrors.genericError'));
       }
