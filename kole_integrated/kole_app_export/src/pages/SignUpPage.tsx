@@ -1,21 +1,25 @@
 // src/pages/SignUpPage.tsx
-import React from "react"; // Removed useState
-import { Link } from "react-router-dom"; // Removed useNavigate as it's handled by SignUpForm
-// Removed unused icons: User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, Briefcase, FileText, ShieldQuestion, Bike
-import KoleLogo from "/assets/kole_logo_new.png";
-import SignUpForm from "../../components/Auth/SignUpForm"; // Import the refactored SignUpForm
+import React from "react";
+import { Link } from "react-router-dom";
+// KoleLogo import will be removed as AuthLayout handles it.
+// Unused icon imports were already removed.
+import SignUpForm from "../../components/Auth/SignUpForm";
+import AuthLayout from '../../components/Layout/AuthLayout'; // Import AuthLayout
 
 const SignUpPage: React.FC = () => {
-  // All state and handlers (showPassword, showConfirmPassword, accountType, step, agreedToTerms, handleSubmit, renderStep1, renderDriverStep2)
-  // have been moved to SignUpForm.tsx.
+  // Logic and state are in SignUpForm.tsx
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-kole-cream-bg p-4">
-      <div className="bg-white p-6 md:p-8 rounded-xl-kole shadow-lg w-full max-w-lg">
-        <img src={KoleLogo} alt="Kôlê Logo" className="h-12 w-auto mx-auto mb-2" />
-        <p className="text-center text-kole-text_secondary font-semibold text-sm mb-6">VOTRE TRAJET, NOTRE MISSION</p>
+    <AuthLayout>
+      {/* The children of AuthLayout is the main content card */}
+      {/* The max-w-lg from original page is overridden by AuthLayout's max-w-md.
+          If max-w-lg is strictly needed, AuthLayout would need to be more flexible,
+          or SignUpForm's card itself would need to manage its width if AuthLayout's child div didn't have max-width.
+          For now, we proceed with AuthLayout's default max-w-md.
+      */}
+      <div className="bg-white p-6 md:p-8 rounded-xl-kole shadow-lg w-full">
+        {/* Branding (logo, tagline) is now handled by AuthLayout */}
         
-        {/* Render the SignUpForm component here */}
         <SignUpForm />
 
         <p className="mt-8 text-center text-sm text-kole-text-secondary">
@@ -25,7 +29,7 @@ const SignUpPage: React.FC = () => {
           </Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 

@@ -1,0 +1,186 @@
+{
+  "authLayout": {
+    "koleLogoAlt": "Logo Kôlê",
+    "mainTitle": "Kôlê",
+    "tagline": "VOTRE TRAJET, NOTRE MISSION"
+  },
+  "loginForm": {
+    "title": "Se connecter à Kôlê",
+    "emailLabel": "Email",
+    "passwordLabel": "Mot de passe",
+    "emailPlaceholder": "Votre adresse email",
+    "passwordPlaceholder": "Votre mot de passe",
+    "forgotPasswordLink": "Mot de passe oublié ?",
+    "submitButton": "Se connecter",
+    "submitButtonLoading": "Connexion...",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Cacher le mot de passe",
+    "validation": {
+      "emailInvalid": "Veuillez entrer une adresse email valide.",
+      "passwordRequired": "Veuillez entrer votre mot de passe."
+    },
+    "firebaseErrors": {
+      "invalidCredentials": "Email ou mot de passe incorrect.",
+      "invalidEmailFormat": "Le format de l'email n'est pas valide.",
+      "tooManyRequests": "Trop de tentatives de connexion. Veuillez réessayer plus tard.",
+      "genericError": "Une erreur est survenue lors de la connexion. Veuillez réessayer."
+    }
+  },
+  "signUpForm": {
+    "step1": {
+      "title": "Créez votre compte",
+      "description": "Informations de base"
+    },
+    "driverStep2": {
+      "title": "Informations Chauffeur",
+      "description": "Véhicule & Documents"
+    },
+    "labels": {
+      "fullName": "Nom complet",
+      "phoneNumber": "Numéro de téléphone",
+      "email": "Email (Optionnel)",
+      "password": "Mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "accountType": "Je suis un :",
+      "agreedToTerms": "Termes et conditions",
+      "vehicleType": "Type de véhicule",
+      "licenseNumber": "Numéro de permis de conduire",
+      "licensePlate": "Plaque d'immatriculation (Moto)",
+      "documentsHeader": "Documents à fournir (Photo de profil, Pièce d'identité, Permis de conduire, Carte grise du véhicule) :",
+      "profilePhoto": "Photo de profil",
+      "idCard": "Pièce d'identité",
+      "driverLicense": "Permis de conduire",
+      "vehicleRegistration": "Carte grise du véhicule"
+    },
+    "placeholders": {
+      "fullName": "Votre nom complet",
+      "phoneNumber": "Votre numéro de téléphone",
+      "email": "Votre adresse e-mail",
+      "password": "Créez un mot de passe (min. 6 caractères)",
+      "confirmPassword": "Confirmez votre mot de passe",
+      "licenseNumber": "Votre numéro de permis",
+      "licensePlate": "AB-123-CD"
+    },
+    "buttons": {
+      "client": "Client",
+      "driver": "Chauffeur",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "signUp": "S'inscrire",
+      "loadingNext": "Chargement...",
+      "loadingSigningUp": "Inscription...",
+      "showPassword": "Afficher le mot de passe",
+      "hidePassword": "Cacher le mot de passe"
+    },
+    "terms": {
+      "acceptPrefix": "J'accepte les",
+      "termsLinkText": "Termes & Conditions",
+      "conjunction": "et la",
+      "privacyLinkText": "Politique de Confidentialité"
+    },
+    "validation": {
+      "fullNameRequired": "Veuillez entrer votre nom complet.",
+      "phoneNumberRequired": "Veuillez entrer votre numéro de téléphone.",
+      "phoneNumberInvalid": "Format du numéro de téléphone invalide.",
+      "emailInvalid": "Adresse email invalide.",
+      "passwordMinLength": "Le mot de passe doit faire au moins 6 caractères.",
+      "passwordsNoMatch": "Les mots de passe ne correspondent pas.",
+      "accountTypeRequired": "Veuillez sélectionner un type de compte.",
+      "agreedToTermsRequired": "Vous devez accepter les termes et conditions.",
+      "licenseNumberRequired": "Le numéro de permis est requis pour les chauffeurs.",
+      "licensePlateRequired": "La plaque d'immatriculation est requise pour les chauffeurs.",
+      "profilePhotoRequired": "La photo de profil est requise.",
+      "idCardRequired": "La pièce d'identité est requise.",
+      "driverLicenseRequired": "Le permis de conduire est requis.",
+      "vehicleRegRequired": "La carte grise est requise."
+    },
+    "firebaseErrors": {
+      "emailInUse": "Cet email est déjà utilisé par un autre compte.",
+      "invalidEmail": "Le format de l'email n'est pas valide.",
+      "weakPassword": "Le mot de passe est trop faible.",
+      "generic": "Une erreur est survenue lors de l'inscription. Veuillez réessayer."
+    }
+  },
+  "phoneSignInForm": {
+    "stepEnterPhone": {
+      "title": "Connexion par téléphone"
+    },
+    "stepEnterOtp": {
+      "title": "Vérifier le code"
+    },
+    "labels": {
+      "phoneNumber": "Numéro de téléphone",
+      "otpCode": "Code de vérification (reçu par SMS)"
+    },
+    "placeholders": {
+      "phoneNumber": "+225XXXXXXXXXX",
+      "otpCode": "Code à {{length}} chiffres"
+    },
+    "buttons": {
+      "sendOtp": "Envoyer le code",
+      "sendingOtp": "Envoi...",
+      "verifyAndSignIn": "Vérifier et se connecter",
+      "verifyingOtp": "Vérification...",
+      "changeNumberOrResend": "Changer de numéro ou renvoyer le code"
+    },
+    "validation": {
+      "phoneNumberTooShort": "Numéro de téléphone trop court.",
+      "phoneNumberFormat": "Format attendu: +IndicatifPaysNumero (ex: +2250707070707)",
+      "otpLength": "Le code OTP doit comporter {{length}} chiffres."
+    },
+    "errors": {
+      "recaptchaInitFailed": "Impossible d'initialiser le contrôle de sécurité. Veuillez rafraîchir la page.",
+      "recaptchaNotReady": "Le vérificateur reCAPTCHA n'est pas prêt. Veuillez patienter ou rafraîchir.",
+      "recaptchaExpired": "Le contrôle de sécurité a expiré. Veuillez réessayer.",
+      "sendOtpFailed": "Une erreur est survenue lors de l'envoi du code. Veuillez vérifier votre numéro et réessayer.",
+      "invalidPhoneNumberFormatFb": "Le format du numéro de téléphone n'est pas valide.",
+      "tooManyRequestsFb": "Trop de demandes. Veuillez réessayer plus tard.",
+      "enterOtpCode": "Veuillez entrer le code à {{length}} chiffres reçu.",
+      "noVerificationSession": "Session de vérification non trouvée. Veuillez renvoyer le code.",
+      "verifyOtpFailed": "Une erreur est survenue lors de la vérification du code. Veuillez réessayer.",
+      "invalidOtpCodeFb": "Le code de vérification est invalide ou a expiré.",
+      "otpCodeExpiredFb": "Le code de vérification a expiré. Veuillez renvoyer un code."
+    }
+  },
+  "forgotPasswordPage": {
+    "formTitle": "Mot de passe oublié ?",
+    "formDescription": "Entrez le numéro de téléphone associé à votre compte. Nous vous enverrons un code pour réinitialiser votre mot de passe.",
+    "labels": {
+      "phoneNumber": "Numéro de téléphone"
+    },
+    "placeholders": {
+      "phoneNumber": "+2250700000000"
+    },
+    "buttons": {
+      "sendCode": "Envoyer le code",
+      "sendingCode": "Envoi en cours..."
+    },
+    "confirmation": {
+      "title": "Demande envoyée !",
+      "description": "Si un compte est associé à <span class=\"font-semibold\">{{phoneNumber}}</span>, vous recevrez un SMS avec les instructions pour réinitialiser votre mot de passe."
+    },
+    "links": {
+      "backToLogin": "Retour à la connexion"
+    },
+    "validation": {
+      "phoneNumberInvalidMin": "Numéro de téléphone invalide.",
+      "phoneNumberFormat": "Format: +IndicatifPaysNumero (ex: +2250700000000)"
+    }
+  },
+  "otpVerificationPage": {
+    "formTitle": "Vérifiez votre numéro",
+    "formDescription": "Nous avons envoyé un code à 6 chiffres au {{phoneNumber}}. Veuillez le saisir ci-dessous.",
+    "buttons": {
+      "verify": "Vérifier",
+      "resendCodeActive": "Renvoyer le code",
+      "resendCodeTimed": "Renvoyer le code ({{time}})"
+    },
+    "links": {
+      "backToSignUp": "Retour à l'inscription"
+    },
+    "alerts": {
+      "codeSubmitted": "Code {{code}} soumis pour vérification (simulation).",
+      "invalidOtp": "Veuillez entrer un code OTP valide à 6 chiffres."
+    }
+  }
+}

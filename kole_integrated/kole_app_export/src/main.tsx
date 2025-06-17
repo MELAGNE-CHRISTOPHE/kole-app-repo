@@ -1,8 +1,9 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { HashRouter } from 'react-router-dom'
-import './index.css'
-import App from './App.tsx'
+import React from 'react'; // Changed to import React
+import { createRoot } from 'react-dom/client';
+import { HashRouter } from 'react-router-dom';
+import './index.css';
+import App from './App.tsx';
+import './i18n'; // Import your i18n configuration
 
 // Ajouter un gestionnaire d'erreurs global
 window.addEventListener('error', (event) => {
@@ -57,11 +58,13 @@ window.addEventListener('load', () => {
 });
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <HashRouter>
-      <App />
-    </HashRouter>
-  </StrictMode>,
+  <React.StrictMode>
+    <React.Suspense fallback="Chargement..."> {/* Or a loading spinner component */}
+      <HashRouter>
+        <App />
+      </HashRouter>
+    </React.Suspense>
+  </React.StrictMode>,
 )
 
 
