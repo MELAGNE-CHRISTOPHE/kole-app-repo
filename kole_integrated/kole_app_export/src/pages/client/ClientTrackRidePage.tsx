@@ -1,10 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
-import { MapPin, Navigation, Phone, MessageCircle, Star, Loader2, AlertTriangle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { MapPin, Navigation, Phone, MessageCircle, Star, Loader2, AlertTriangle, Share2 } from 'lucide-react'; // Added Share2
 import MapComponent, { Marker } from '../../components/MapComponent';
-import * as rideService from '../../services/rideService'; // Import rideService
+import * as rideService from '../../services/rideService';
+import * as emergencyService from '../../services/emergencyService'; // Import emergencyService
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -37,11 +49,20 @@ const ClientTrackRidePage: React.FC = () => {
   
   const [waitingTimer, setWaitingTimer] = useState<number | null>(null);
   const [extraCharge, setExtraCharge] = useState(0);
-  const [isLoading, setIsLoading] = useState(true); // For initial loading of driver location subscription
+  const [isLoading, setIsLoading] = useState(true);
+
+  // SOS State
+  const [showSosConfirmDialog, setShowSosConfirmDialog] = useState(false);
+  const [isActivatingSos, setIsActivatingSos] = useState(false);
+
+  // Cancel Ride State
+  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
+  const [isCancellingRide, setIsCancellingRide] = useState(false);
+  const stopLocationUpdatesRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!bookingId || !driverStaticDetails || !rideDetails.pickup?.coordinates || !rideDetails.destination?.coordinates) {
-      toast.error(t('rideService.errors.bookingNotFound')); // Or a more specific error
+      toast.error(t('rideService.errors.bookingNotFound'));
       navigate('/client');
       return;
     }
@@ -69,11 +90,14 @@ const ClientTrackRidePage: React.FC = () => {
       { lat: rideDetails.pickup.coordinates.latitude, lng: rideDetails.pickup.coordinates.longitude },
       { lat: rideDetails.destination.coordinates.latitude, lng: rideDetails.destination.coordinates.longitude }
     );
+    stopLocationUpdatesRef.current = cleanupSubscription;
 
     return () => {
-      cleanupSubscription();
+      if (stopLocationUpdatesRef.current) {
+        stopLocationUpdatesRef.current();
+      }
     };
-  }, [bookingId, driverStaticDetails, rideDetails, navigate, t]); // Removed liveDriverLocation from deps
+  }, [bookingId, driverStaticDetails, rideDetails, navigate, t]);
 
   useEffect(() => {
     if (currentRideStatus === 'ARRIVED_AT_DESTINATION') {
@@ -126,6 +150,109 @@ const ClientTrackRidePage: React.FC = () => {
   
   const callDriver = () => {
     if (driverStaticDetails?.phone) window.location.href = `tel:${driverStaticDetails.phone}`;
+  };
+
+  const handleShareRide = async () => {
+    if (!bookingId || !rideDetails || !driverStaticDetails) {
+      toast.info(t('clientTrackRidePage.toasts.shareNotReady', "Les détails du trajet ne sont pas encore prêts pour le partage."));
+      return;
+    }
+
+    const rideTrackUrl = `https://kole.africa/track?id=${bookingId}`; // Conceptual URL
+    const shareData = {
+      title: t('clientTrackRidePage.shareContent.title'),
+      text: t('clientTrackRidePage.shareContent.text', {
+        destinationAddress: rideDetails.destination?.address || t('clientTrackRidePage.shareContent.unknownDestination', "destination inconnue"),
+        driverName: driverStaticDetails.name || t('clientTrackRidePage.shareContent.yourKoleDriver', "votre chauffeur Kôlê"),
+        rideTrackUrl: rideTrackUrl,
+      }),
+      url: rideTrackUrl,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        toast.success(t('clientTrackRidePage.toasts.shareSuccessful'));
+      } catch (err) {
+        console.error('Share failed:', err);
+        if ((err as Error).name !== 'AbortError') { // Don't toast if user cancelled
+          toast.error(t('clientTrackRidePage.toasts.shareFailed', { error: (err as Error).message }));
+        }
+      }
+    } else {
+      // Fallback: Copy link to clipboard
+      try {
+        await navigator.clipboard.writeText(rideTrackUrl);
+        toast.success(t('clientTrackRidePage.toasts.clipboardCopySuccess'));
+      } catch (err) {
+        console.error('Clipboard copy failed:', err);
+        toast.error(t('clientTrackRidePage.toasts.clipboardCopyFailed'));
+      }
+    }
+  };
+
+  const handleSosConfirm = async () => {
+    if (!bookingId) {
+      toast.error(t('rideService.errors.bookingNotFound')); // Or a more generic SOS error
+      return;
+    }
+    // Determine current location for SOS
+    const currentLocation = liveDriverLocation
+      ? { latitude: liveDriverLocation.latitude, longitude: liveDriverLocation.longitude }
+      : (rideDetails.pickup?.coordinates || { latitude: 0, longitude: 0 }); // Fallback if no live location
+
+    setIsActivatingSos(true);
+    const toastId = toast.loading(t('clientTrackRidePage.toasts.sosActivationInProgress'));
+
+    try {
+      const result = await emergencyService.triggerSOS(bookingId, currentLocation);
+      toast.dismiss(toastId);
+
+      if (result.error) {
+        toast.error(t(result.error.messageKey, { details: result.error.details }));
+      } else if (result.data?.success) {
+        toast.success(t(result.data.messageKey || 'emergencyService.success.sosActivated'));
+        // Potentially further UI changes or navigation, out of scope for this task
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error(t('emergencyService.errors.sosFailed'));
+      console.error("SOS activation unexpected error:", error);
+    } finally {
+      setShowSosConfirmDialog(false);
+      setIsActivatingSos(false);
+    }
+  };
+
+  const handleCancelRideConfirm = async () => {
+    if (!bookingId) {
+      toast.error(t('rideService.errors.bookingNotFound'));
+      return;
+    }
+    setIsCancellingRide(true);
+    const toastId = toast.loading(t('clientTrackRidePage.toasts.cancelRideInProgress'));
+
+    try {
+      const result = await rideService.cancelRideRequest(bookingId);
+      toast.dismiss(toastId);
+
+      if (result.error) {
+        toast.error(t(result.error.messageKey || 'rideService.errors.cancelRideFailed'));
+      } else if (result.data?.success) {
+        toast.success(t(result.data.messageKey || 'rideService.success.rideCancelled'));
+        if (stopLocationUpdatesRef.current) {
+          stopLocationUpdatesRef.current(); // Stop listening to location updates
+        }
+        navigate('/client'); // Navigate to main map or dashboard
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error(t('rideService.errors.cancelRideFailed'));
+      console.error("Cancel ride unexpected error:", error);
+    } finally {
+      setShowCancelConfirmDialog(false);
+      setIsCancellingRide(false);
+    }
   };
   
   const confirmPresence = () => {
@@ -251,6 +378,9 @@ const ClientTrackRidePage: React.FC = () => {
                   <Button variant="outline" size="icon" className="border-kole-blue-primary text-kole-blue-primary hover:bg-kole-blue-primary/10 p-2" aria-label={t('clientTrackRidePage.messageDriverLabel', {driverName: driverStaticDetails.name})}>
                     <MessageCircle className="h-5 w-5" />
                   </Button>
+                  <Button variant="outline" size="icon" onClick={handleShareRide} className="border-kole-blue-primary text-kole-blue-primary hover:bg-kole-blue-primary/10 p-2" aria-label={t('clientTrackRidePage.buttons.shareRideAriaLabel')}>
+                    <Share2 className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
             )}
@@ -300,6 +430,82 @@ const ClientTrackRidePage: React.FC = () => {
                 <p className="font-bold text-kole-text-primary text-lg">{rideDetails.price + extraCharge} FCFA</p>
               </div>
             </div>
+
+            {/* SOS Button and Dialog */}
+            <div className="mt-4">
+              <AlertDialog open={showSosConfirmDialog} onOpenChange={setShowSosConfirmDialog}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    className="w-full font-bold bg-kole-destructive text-white hover:bg-kole-destructive/90"
+                    disabled={isActivatingSos}
+                  >
+                    {isActivatingSos ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
+                    {t('clientTrackRidePage.buttons.sos')}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="kole-card">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t('clientTrackRidePage.sosConfirmDialog.title')}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('clientTrackRidePage.sosConfirmDialog.message')}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="kole-btn-secondary" disabled={isActivatingSos}>{t('clientTrackRidePage.sosConfirmDialog.cancelText')}</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="kole-btn-destructive" // Ensure this style exists or use bg-kole-destructive etc.
+                      onClick={handleSosConfirm}
+                      disabled={isActivatingSos}
+                    >
+                      {isActivatingSos ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      {t('clientTrackRidePage.sosConfirmDialog.confirmText')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            {/* Cancel Ride Button and Dialog */}
+            {(currentRideStatus === 'TO_CLIENT' || currentRideStatus === 'WAITING_AT_PICKUP') && (
+              <div className="mt-2">
+                <AlertDialog open={showCancelConfirmDialog} onOpenChange={setShowCancelConfirmDialog}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full font-semibold border-kole-destructive text-kole-destructive hover:bg-kole-destructive/10"
+                      disabled={isCancellingRide}
+                    >
+                      {isCancellingRide ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      {t('clientTrackRidePage.buttons.cancelRide')}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="kole-card">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t('clientTrackRidePage.cancelRideDialog.title')}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {currentRideStatus === 'TO_CLIENT'
+                          ? t('clientTrackRidePage.cancelRideDialog.messageBeforeDriverArrival')
+                          : t('clientTrackRidePage.cancelRideDialog.messageDefault')}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="kole-btn-secondary" disabled={isCancellingRide}>
+                        {t('clientTrackRidePage.cancelRideDialog.keepRideText')}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-kole-destructive hover:bg-kole-destructive/90 text-white"
+                        onClick={handleCancelRideConfirm}
+                        disabled={isCancellingRide}
+                      >
+                        {isCancellingRide ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        {t('clientTrackRidePage.cancelRideDialog.confirmText')}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

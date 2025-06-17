@@ -226,7 +226,8 @@
     },
     "buttons": {
       "bookNow": "Commander maintenant",
-      "submittingRequest": "Envoi de la demande..."
+      "submittingRequest": "Envoi de la demande...",
+      "changePaymentMethod": "Changer"
     },
     "markerTitles": {
       "pickup": "Départ",
@@ -244,14 +245,45 @@
     "rideDetailsTitle": "Détails du trajet",
     "errors": {
       "selectDestination": "Veuillez rechercher et sélectionner une destination valide avant de commander."
-    }
+    },
+    "labels": {
+      "from": "Départ",
+      "to": "Destination",
+      "estimatedPrice": "Prix estimé",
+      "estimatedTime": "Temps estimé",
+      "selectVehicleType": "Choisissez votre Kôlê :",
+      "paymentMethod": "Mode de paiement",
+      "passengers": "Nombre de passagers",
+      "luggage": "Avez-vous des bagages significatifs ?"
+    },
+    "tooltips": {
+      "passengersInfo": "Maximum 2 pour une moto.",
+      "luggageInfo": "Un petit sac à dos est généralement accepté sans supplément."
+    },
+    "vehicleTypes": {
+      "standard": "Kôlê Classic",
+      "confort": "Kôlê Confort"
+    },
+    "vehicleEtaDisplay": "~{{eta}} min",
+    "priceBase": "Prix de base"
   },
   "userService": {
     "errors": {
       "fetchProfileFailed": "Impossible de charger votre profil. Veuillez réessayer.",
       "logoutFailed": "La déconnexion a échoué. Veuillez réessayer.",
       "fetchWalletDetailsFailed": "Impossible de récupérer le solde de votre portefeuille.",
-      "fetchTransactionsFailed": "Impossible de récupérer l'historique de vos transactions."
+      "fetchTransactionsFailed": "Impossible de récupérer l'historique de vos transactions.",
+      "updateProfileFailed": "La mise à jour de votre profil a échoué. Veuillez réessayer.",
+      "getFavoritesFailed": "Erreur lors de la récupération des lieux favoris.",
+      "addFavoriteFailed": "Erreur lors de l'ajout du lieu favori.",
+      "deleteFavoriteFailed": "Erreur lors de la suppression du lieu favori.",
+      "fetchPaymentMethodsFailed": "Impossible de charger vos modes de paiement.",
+      "fetchRideStatsFailed": "Impossible de charger vos statistiques de trajets. Veuillez réessayer."
+    },
+    "success": {
+      "profileUpdated": "Votre profil a été mis à jour avec succès !",
+      "favoriteAdded": "Lieu favori ajouté avec succès.",
+      "favoriteDeleted": "Lieu favori supprimé avec succès."
     }
   },
   "clientProfilePage": {
@@ -266,7 +298,18 @@
     "loggingOut": "Déconnexion en cours...",
     "logoutSuccess": "Vous avez été déconnecté avec succès.",
     "initialsFallback": "{{initial1}}{{initial2}}",
-    "avatarAlt": "Avatar de {{name}}"
+    "avatarAlt": "Avatar de {{name}}",
+    "manageFavoritePlaces": "Gérer les lieux favoris",
+    "rideStats": {
+      "title": "Vos Statistiques Kôlê",
+      "totalRides": "Trajets Effectués",
+      "totalDistance": "Distance Parcourue",
+      "totalSpent": "Total Dépensé",
+      "memberSince": "Membre Depuis",
+      "kmUnit": "km",
+      "currencyUnit": "FCFA",
+      "loadingStats": "Chargement des statistiques..."
+    }
   },
   "rideService": {
     "errors": {
@@ -279,13 +322,43 @@
     },
     "success": {
       "rideCancelled": "Votre demande de course a été annulée.",
-      "ratingSubmitted": "Merci pour votre évaluation !"
+      "ratingSubmitted": "Merci pour votre évaluation !",
+      "issueReported": "Votre signalement (ID: {{reportId}}) a bien été envoyé. Notre équipe vous contactera si nécessaire."
+    },
+    "errors": {
+      "fetchHistoryFailed": "Impossible de charger l'historique des trajets.",
+      "requestRideFailed": "La demande de course a échoué. Veuillez réessayer.",
+      "getBookingStatusFailed": "Impossible de vérifier le statut de votre course.",
+      "cancelRideFailed": "L'annulation de la course a échoué.",
+      "bookingNotFound": "Détails de la réservation introuvables.",
+      "submitRatingFailed": "L'envoi de votre évaluation a échoué. Veuillez réessayer.",
+      "reportIssueFailed": "L'envoi de votre signalement a échoué. Veuillez réessayer."
     }
   },
   "clientRideHistoryPage": {
     "title": "Mes trajets",
     "loadingHistory": "Chargement de l'historique...",
     "filterButtonLabel": "Filtrer les trajets",
+    "buttons": {
+      "redoTrip": "Refaire ce trajet",
+      "viewReceipt": "Voir le reçu",
+      "reportIssue": "Signaler un problème"
+    },
+    "filters": {
+      "title": "Filtrer les trajets",
+      "dateRange": "Plage de dates",
+      "from": "Du",
+      "to": "Au",
+      "status": "Statut du trajet",
+      "allStatuses": "Tous les statuts",
+      "apply": "Appliquer les filtres",
+      "reset": "Réinitialiser les filtres",
+      "noFiltersApplied": "Aucun filtre appliqué. Affichage de tous les trajets.",
+      "filtersApplied": "Filtres actifs. {{count}} trajets trouvés.",
+      "searchPlaceholder": "Rechercher (lieu, chauffeur...)",
+      "clearSearch": "Effacer la recherche",
+      "activeSearchText": "Résultats pour : \"{{term}}\""
+    },
     "emptyStateTitle": "Aucun trajet pour le moment",
     "emptyStateSubtitle": "Vos courses passées s’afficheront ici.",
     "pagination": {
@@ -339,7 +412,40 @@
     "callDriverLabel": "Appeler {{driverName}}",
     "messageDriverLabel": "Message à {{driverName}}",
     "defaultPickup": "Position de prise en charge",
-    "defaultDestination": "Destination finale"
+    "defaultDestination": "Destination finale",
+    "buttons": {
+      "sos": "SOS",
+      "shareRide": "Partager le trajet",
+      "shareRideAriaLabel": "Partager les détails de mon trajet actuel",
+      "cancelRide": "Annuler le trajet"
+    },
+    "shareContent": {
+      "title": "Mon trajet Kôlê",
+      "text": "Je suis en route avec Kôlê. Destination : {{destinationAddress}}. Chauffeur : {{driverName}}. Suivez ma progression (lien conceptuel) : {{rideTrackUrl}}",
+      "textSimple": "Je suis en route avec Kôlê et j'arrive bientôt !"
+    },
+    "sosConfirmDialog": {
+      "title": "Activer le Mode SOS ?",
+      "message": "Ceci est réservé aux urgences réelles. Nos équipes et potentiellement les secours seront alertés de votre situation et localisation. Continuer ?",
+      "confirmText": "Oui, Activer SOS",
+      "cancelText": "Annuler"
+    },
+    "cancelRideDialog": {
+      "title": "Confirmer l'annulation du trajet",
+      "messageDefault": "Êtes-vous sûr de vouloir annuler ce trajet ? Des frais peuvent s'appliquer selon les conditions.",
+      "messageBeforeDriverArrival": "Votre chauffeur n'est pas encore arrivé. Annuler maintenant est généralement sans frais. Confirmer ?",
+      "confirmText": "Oui, Annuler le trajet",
+      "keepRideText": "Non, Garder le trajet"
+    },
+    "toasts": {
+      "sosActivationInProgress": "Activation du mode SOS...",
+      "shareNotSupported": "La fonction de partage n'est pas supportée par votre navigateur ou appareil.",
+      "shareSuccessful": "Trajet partagé avec succès !",
+      "shareFailed": "Le partage du trajet a échoué : {{error}}",
+      "clipboardCopySuccess": "Lien de suivi copié dans le presse-papiers !",
+      "clipboardCopyFailed": "La copie du lien a échoué.",
+      "cancelRideInProgress": "Annulation du trajet en cours..."
+    }
   },
   "clientRateRidePage": {
     "pageTitle": "Évaluer votre trajet",
@@ -361,7 +467,12 @@
   },
   "clientSearch": {
     "noResults": "Aucun résultat trouvé pour '{{query}}'.",
-    "loadingSuggestions": "Chargement des suggestions..."
+    "loadingSuggestions": "Chargement des suggestions...",
+    "favoritePlacesTitle": "Vos Lieux Favoris",
+    "loadingFavorites": "Chargement des favoris...",
+    "noFavoritesFound": "Aucun lieu favori. Vous pouvez les ajouter depuis votre profil.",
+    "homeLabel": "Domicile",
+    "workLabel": "Travail"
   },
   "clientWalletPage": {
     "title": "Mon Portefeuille Kôlê",
@@ -388,5 +499,115 @@
     "success": {
       "topUpInitiated": "Recharge de {{amount}} FCFA initiée avec succès ! Suivez les instructions sur votre téléphone."
     }
+  },
+  "clientEditProfilePage": {
+    "pageTitle": "Modifier mon profil",
+    "loadingProfile": "Chargement de vos informations...",
+    "labels": {
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "Adresse e-mail",
+      "phoneNumber": "Numéro de téléphone"
+    },
+    "buttons": {
+      "saveChanges": "Enregistrer",
+      "savingChanges": "Enregistrement...",
+      "cancel": "Annuler"
+    },
+    "validation": {
+      "firstNameRequired": "Le prénom est requis.",
+      "lastNameRequired": "Le nom est requis.",
+      "emailInvalid": "Veuillez entrer une adresse email valide.",
+      "phoneNumberInvalid": "Veuillez entrer un numéro de téléphone valide (ex: +225XXXXXXXXXX)."
+    }
+  },
+  "clientFavoritePlacesPage": {
+    "pageTitle": "Mes Lieux Favoris",
+    "addFavoriteButton": "Ajouter un lieu favori",
+    "labelLabel": "Nom du lieu (ex: Maison, Travail)",
+    "addressLabel": "Adresse",
+    "labelPlaceholder": "Entrez un nom pour ce lieu",
+    "addressPlaceholder": "Rechercher une adresse...",
+    "buttons": {
+      "save": "Enregistrer",
+      "saving": "Enregistrement...",
+      "delete": "Supprimer",
+      "cancel": "Annuler",
+      "confirmDelete": "Confirmer"
+    },
+    "emptyFavorites": "Vous n'avez pas encore de lieux favoris.",
+    "confirmDeleteTitle": "Confirmer la suppression",
+    "confirmDeleteMessage": "Êtes-vous sûr de vouloir supprimer '{{label}}' de vos favoris ?",
+    "noAddressSelected": "Veuillez sélectionner une adresse valide à partir des suggestions.",
+    "validation": {
+      "labelRequired": "Le nom du lieu est requis.",
+      "addressRequired": "L'adresse est requise."
+    }
+  },
+  "paymentMethods": {
+    "wallet": "Portefeuille Kôlê (Solde: {{balance}} FCFA)",
+    "walletNoBalance": "Portefeuille Kôlê",
+    "cash": "Espèces",
+    "orangeMoneyCI": "Orange Money CI",
+    "mtnMoneyCI": "MTN Mobile Money CI",
+    "moovMoneyCI": "Moov Money CI"
+  },
+  "selectPaymentMethodSheet": {
+    "title": "Choisir un mode de paiement",
+    "currentBalance": "Solde actuel: {{balance}} FCFA"
+  },
+  "clientReportIssuePage": {
+    "pageTitle": "Signaler un Problème",
+    "rideContextTitle": "Concernant le trajet avec {driverName} le {date}",
+    "rideDetails": "De: {pickup} à {destination}",
+    "issueCategoryLabel": "Catégorie du problème",
+    "descriptionLabel": "Description détaillée du problème",
+    "descriptionPlaceholder": "Veuillez décrire le problème rencontré...",
+    "buttons": {
+      "submitReport": "Envoyer le signalement",
+      "submittingReport": "Envoi en cours..."
+    },
+    "validation": {
+      "categoryRequired": "Veuillez sélectionner une catégorie.",
+      "descriptionRequired": "Veuillez décrire le problème."
+    }
+  },
+  "issueCategories": {
+    "selectPlaceholder": "Choisissez une catégorie...",
+    "driverBehavior": "Comportement du chauffeur",
+    "vehicleCondition": "État du véhicule",
+    "routeTaken": "Itinéraire emprunté",
+    "billingError": "Erreur de facturation",
+    "lostItem": "Objet perdu",
+    "other": "Autre"
+  },
+  "emergencyService": {
+    "success": {
+      "sosActivated": "SOS activé. Nos équipes sont alertées. Si vous êtes en danger immédiat, contactez les services d'urgence locaux."
+    },
+    "errors": {
+      "sosFailed": "L'activation du mode SOS a échoué. Veuillez contacter directement les secours si nécessaire."
+    }
+  },
+  "clientRideReceiptPage": {
+    "pageTitle": "Reçu de Course Kôlê",
+    "rideIdLabel": "ID du Trajet:",
+    "dateLabel": "Date et Heure:",
+    "driverLabel": "Chauffeur:",
+    "vehicleLabel": "Véhicule:",
+    "pickupLabel": "Point de départ:",
+    "destinationLabel": "Destination:",
+    "paymentMethodLabel": "Payé avec:",
+    "transactionIdLabel": "ID de Transaction:",
+    "fareDetailsTitle": "Détails du Tarif",
+    "totalPaidLabel": "Total Payé:",
+    "buttons": {
+      "print": "Imprimer le reçu",
+      "downloadPdf": "Télécharger en PDF",
+      "backToHistory": "Retour à l'historique"
+    }
+  },
+  "common": {
+    "featureNotAvailableYet": "Cette fonctionnalité n'est pas encore disponible."
   }
 }

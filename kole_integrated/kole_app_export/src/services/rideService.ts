@@ -10,6 +10,11 @@ export interface RideHistoryEntry {
   statusKey: string;
   driverAvatarUrl?: string;
   vehicleInfo?: string;
+  timestamp: number;
+  pickupCoordinates: { latitude: number; longitude: number; };
+  destinationCoordinates: { latitude: number; longitude: number; };
+  paymentMethodUsed?: string; // Added
+  transactionId?: string; // Added
 }
 
 export interface ServiceError {
@@ -22,6 +27,10 @@ export interface RideRequestData {
   destination: { coordinates: { latitude: number; longitude: number }; address: string };
   price: number;
   estimatedTime: string;
+  vehicleType: string;
+  paymentMethodId: string;
+  passengerCount: number; // Added passengerCount
+  hasLuggage: boolean; // Added hasLuggage
 }
 
 export interface DriverData {
@@ -60,6 +69,12 @@ export interface RatingData {
   comment?: string;
 }
 
+// Interface for reporting an issue
+export interface IssueData {
+  rideId: string;
+  categoryKey: string; // e.g., 'issueCategories.driverBehavior'
+  description: string;
+}
 
 const MOCK_RIDE_HISTORY_DATA: RideHistoryEntry[] = Array.from({ length: 14 }, (_, i) => ({
   id: `ride${i + 1}`,
@@ -71,20 +86,63 @@ const MOCK_RIDE_HISTORY_DATA: RideHistoryEntry[] = Array.from({ length: 14 }, (_
   statusKey: i % 5 === 4 ? 'rideStatuses.cancelled' : 'rideStatuses.completed',
   driverAvatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(i % 3 === 0 ? 'Konan Kouassi' : (i % 3 === 1 ? 'Aisha Diallo' : 'Yao NGuessan'))}&background=random&color=fff`,
   vehicleInfo: `Moto - SY ${String(1000 + i).padStart(4, '0')} CI`,
+  timestamp: Date.now() - i * 24 * 60 * 60 * 1000 - (i % 3) * 12 * 60 * 60 * 1000,
+  pickupCoordinates: { latitude: 5.35 + (i * 0.001), longitude: -4.02 - (i * 0.001) },
+  destinationCoordinates: { latitude: 5.32 - (i * 0.002), longitude: -4.00 + (i * 0.002) },
+  paymentMethodUsed: i % 3 === 0 ? 'Portefeuille Kôlê' : (i % 3 === 1 ? 'Espèces' : 'Orange Money CI'),
+  transactionId: `TXN_K${String(Date.now()).slice(-6)}${String(1000 + i).padStart(4,'0')}`
 }));
+
+export interface RideHistoryFilters {
+  dateFrom?: Date;
+  dateTo?: Date;
+  statusKey?: string;
+  searchTerm?: string; // Added searchTerm
+}
 
 export const getRideHistory = async (
   page: number = 1,
-  limit: number = 5
+  limit: number = 5,
+  filters?: RideHistoryFilters
 ): Promise<{ data: RideHistoryEntry[] | null; totalPages: number; currentPage: number; error: ServiceError | null; }> => {
   return new Promise((resolve) => {
     setTimeout(() => {
       if (Math.random() < 0.9) {
-        const totalItems = MOCK_RIDE_HISTORY_DATA.length;
+        let filteredData = MOCK_RIDE_HISTORY_DATA;
+
+        if (filters) {
+          filteredData = MOCK_RIDE_HISTORY_DATA.filter(entry => {
+            if (filters.dateFrom && entry.timestamp < filters.dateFrom.getTime()) {
+              return false;
+            }
+            if (filters.dateTo) { // Adjust to include the whole day for dateTo
+              const endOfDay = new Date(filters.dateTo);
+              endOfDay.setHours(23, 59, 59, 999);
+              if (entry.timestamp > endOfDay.getTime()) {
+                return false;
+              }
+            }
+            if (filters.statusKey && filters.statusKey !== '' && entry.statusKey !== filters.statusKey) {
+              return false;
+            }
+            if (filters.searchTerm && filters.searchTerm.trim() !== '') {
+              const term = filters.searchTerm.toLowerCase().trim();
+              const matchesPickup = entry.pickup.toLowerCase().includes(term);
+              const matchesDestination = entry.destination.toLowerCase().includes(term);
+              const matchesDriver = entry.driverName.toLowerCase().includes(term);
+              if (!matchesPickup && !matchesDestination && !matchesDriver) {
+                return false;
+              }
+            }
+            return true;
+          });
+        }
+
+        const totalItems = filteredData.length;
         const totalPages = Math.ceil(totalItems / limit);
         const startIndex = (page - 1) * limit;
         const endIndex = startIndex + limit;
-        const paginatedData = MOCK_RIDE_HISTORY_DATA.slice(startIndex, endIndex);
+        const paginatedData = filteredData.slice(startIndex, endIndex);
         resolve({ data: paginatedData, totalPages, currentPage: page, error: null });
       } else {
         resolve({ data: null, totalPages: 0, currentPage: page, error: { messageKey: 'rideService.errors.fetchHistoryFailed', details: 'Simulated network error fetching ride history.' } });
@@ -126,7 +184,12 @@ export const requestRide = async (
         destLoc: { lat: rideDetails.destination.coordinates.latitude, lng: rideDetails.destination.coordinates.longitude },
         etaCounter: 5,
       };
-      console.log('Mock ride request successful:', mockBooking.id, mockBooking);
+      console.log('Mock ride request successful:', mockBooking.id,
+        'Vehicle Type:', rideDetails.vehicleType,
+        'Payment Method ID:', rideDetails.paymentMethodId,
+        'Passengers:', rideDetails.passengerCount,
+        'Has Luggage:', rideDetails.hasLuggage,
+        mockBooking);
       resolve({ data: { bookingId: mockBooking.id, status: 'SEARCHING_FOR_DRIVER' }, error: null });
     }, 1000);
   });
@@ -295,6 +358,35 @@ export const submitRideRating = async (
         resolve({ data: { success: true, messageKey: 'rideService.success.ratingSubmitted' }, error: null });
       } else { // 10% failure rate
         resolve({ data: null, error: { messageKey: 'rideService.errors.submitRatingFailed', details: 'Simulated network error during rating submission.' } });
+      }
+    }, 1000); // Simulate 1 second delay
+  });
+};
+
+// Function for reporting an issue with a ride
+export const reportRideIssue = async (
+  issueData: IssueData
+): Promise<{ data: { success: boolean; reportId?: string; messageKey?: string } | null; error: ServiceError | null; }> => {
+  return new Promise((resolve) => {
+    console.log("Reporting issue (mock):", issueData);
+    setTimeout(() => {
+      if (Math.random() < 0.9) { // 90% success rate
+        resolve({
+          data: {
+            success: true,
+            reportId: `KLI-${Date.now()}`,
+            messageKey: 'rideService.success.issueReported',
+          },
+          error: null,
+        });
+      } else { // 10% failure rate
+        resolve({
+          data: null,
+          error: {
+            messageKey: 'rideService.errors.reportIssueFailed',
+            details: 'Simulated network or server error during issue reporting.',
+          },
+        });
       }
     }, 1000); // Simulate 1 second delay
   });

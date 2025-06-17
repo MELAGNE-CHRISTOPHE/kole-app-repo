@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
-import { Button } from "../../components/ui/button"; // Import Button if needed for logout styling
-import { ChevronRight, Edit3, Bell, CreditCard, HelpCircle, Info, LogOut, Loader2 } from "lucide-react"; // Added Loader2
+import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card"; // Added Card components
+import { ChevronRight, Edit3, Bell, CreditCard, HelpCircle, Info, LogOut, Loader2, MapPin, BarChart3, TrendingUp, DollarSign, CalendarDays } from "lucide-react"; // Added more icons for stats
 import ClientBottomNavBar from "../../components/ClientBottomNavBar";
-import { getUserProfile, logoutUser, UserProfileData, ServiceError } from "../../services/userService"; // Import from userService
+import { getUserProfile, logoutUser, UserProfileData, getUserRideStats, UserRideStats } from "../../services/userService"; // Added UserRideStats and service
 import { toast } from "sonner";
 import { useTranslation } from 'react-i18next';
 
@@ -40,25 +40,38 @@ const ClientProfilePage: React.FC = () => {
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState<UserProfileData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Combined loading state for profile
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const [rideStats, setRideStats] = useState<UserRideStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+
   useEffect(() => {
-    const fetchProfile = async () => {
-      setIsLoading(true);
-      const result = await getUserProfile();
-      if (result.data) {
-        setProfile(result.data);
-      } else if (result.error) {
-        toast.error(t(result.error.messageKey, { details: result.error.details }));
+    const fetchData = async () => {
+      setIsLoading(true); // For profile
+      setIsLoadingStats(true);
+
+      const profileResult = await getUserProfile();
+      if (profileResult.data) {
+        setProfile(profileResult.data);
+      } else if (profileResult.error) {
+        toast.error(t(profileResult.error.messageKey, { details: profileResult.error.details }));
       }
-      setIsLoading(false);
+      setIsLoading(false); // Profile loading done
+
+      const statsResult = await getUserRideStats();
+      if (statsResult.data) {
+        setRideStats(statsResult.data);
+      } else if (statsResult.error) {
+        toast.error(t(statsResult.error.messageKey));
+      }
+      setIsLoadingStats(false); // Stats loading done
     };
-    fetchProfile();
+    fetchData();
   }, [t]);
 
   const handleLogout = async () => {
-    setIsLoggingOut(true);
+    setIsLoggingOut(true); // Keep this for logout button's own loading state
     const result = await logoutUser();
     if (result.error) {
       toast.error(t(result.error.messageKey, { details: result.error.details }));
@@ -112,8 +125,51 @@ const ClientProfilePage: React.FC = () => {
           {profile.phoneNumber && <p className="text-sm text-kole-text-secondary">{profile.phoneNumber}</p>}
         </div>
 
+        {/* Ride Stats Section */}
+        <Card className="kole-card border-kole-border shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-md font-semibold text-kole-text-primary">{t('clientProfilePage.rideStats.title')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingStats ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-kole-blue-primary mr-2" />
+                <span className="text-kole-text-secondary">{t('clientProfilePage.rideStats.loadingStats')}</span>
+              </div>
+            ) : rideStats ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div className="flex items-center">
+                  <BarChart3 size={18} className="text-kole-blue-primary mr-2.5" />
+                  <span className="text-kole-text-secondary">{t('clientProfilePage.rideStats.totalRides')}:</span>
+                  <span className="font-semibold text-kole-text-primary ml-auto">{rideStats.totalRides}</span>
+                </div>
+                <div className="flex items-center">
+                  <TrendingUp size={18} className="text-kole-blue-primary mr-2.5" />
+                  <span className="text-kole-text-secondary">{t('clientProfilePage.rideStats.totalDistance')}:</span>
+                  <span className="font-semibold text-kole-text-primary ml-auto">{rideStats.totalDistanceKm.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})} {t('clientProfilePage.rideStats.kmUnit')}</span>
+                </div>
+                <div className="flex items-center">
+                  <DollarSign size={18} className="text-kole-blue-primary mr-2.5" />
+                  <span className="text-kole-text-secondary">{t('clientProfilePage.rideStats.totalSpent')}:</span>
+                  <span className="font-semibold text-kole-text-primary ml-auto">{rideStats.totalSpentFCFA.toLocaleString()} {t('clientProfilePage.rideStats.currencyUnit')}</span>
+                </div>
+                {rideStats.memberSince && (
+                  <div className="flex items-center">
+                    <CalendarDays size={18} className="text-kole-blue-primary mr-2.5" />
+                    <span className="text-kole-text-secondary">{t('clientProfilePage.rideStats.memberSince')}:</span>
+                    <span className="font-semibold text-kole-text-primary ml-auto">{rideStats.memberSince}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-kole-text-secondary text-center py-4">{t('userService.errors.fetchRideStatsFailed')}</p> // Display error if stats failed but profile loaded
+            )}
+          </CardContent>
+        </Card>
+
         <div className="space-y-2.5">
-          <ProfileMenuItem icon={Edit3} label={t('clientProfilePage.editInfo')} onClick={() => console.log("Navigate to Edit Info")} />
+          <ProfileMenuItem icon={Edit3} label={t('clientProfilePage.editInfo')} onClick={() => navigate('/client/profile/edit')} />
+          <ProfileMenuItem icon={MapPin} label={t('clientProfilePage.manageFavoritePlaces')} onClick={() => navigate('/client/profile/favorites')} />
           <ProfileMenuItem icon={Bell} label={t('clientProfilePage.notificationPrefs')} onClick={() => console.log("Navigate to Notification Preferences")} />
           <ProfileMenuItem icon={CreditCard} label={t('clientProfilePage.managePayments')} onClick={() => console.log("Navigate to Manage Payments")} />
           <ProfileMenuItem icon={HelpCircle} label={t('clientProfilePage.helpSupport')} onClick={() => console.log("Navigate to Help & Support")} />

@@ -21,6 +21,10 @@ const ClientSearchingDriverPage = lazy(() => import('./pages/client/ClientSearch
 const ClientTrackRidePage = lazy(() => import('./pages/client/ClientTrackRidePage'));
 const ClientRateRidePage = lazy(() => import('./pages/client/ClientRateRidePage'));
 const ClientRideCompletedPage = lazy(() => import('./pages/client/ClientRideCompletedPage'));
+const ClientEditProfilePage = lazy(() => import('./pages/client/ClientEditProfilePage'));
+const ClientFavoritePlacesPage = lazy(() => import('./pages/client/ClientFavoritePlacesPage'));
+const ClientRideReceiptPage = lazy(() => import('./pages/client/ClientRideReceiptPage'));
+const ClientReportIssuePage = lazy(() => import('./pages/client/ClientReportIssuePage')); // Added Report Issue Page
 
 const DriverDashboard = lazy(() => import('./pages/driver/DriverDashboard'));
 const DriverMainMapPage = lazy(() => import('./pages/driver/DriverMainMapPage'));
@@ -200,6 +204,26 @@ const App: React.FC = () => {
             <Route path="/client/completed" element={
               <SimpleRoute>
                 <ClientRideCompletedPage />
+              </SimpleRoute>
+            } />
+            <Route path="/client/profile/edit" element={ // New Route for Edit Profile
+              <SimpleRoute>
+                <ClientEditProfilePage />
+              </SimpleRoute>
+            } />
+            <Route path="/client/profile/favorites" element={ // New Route for Favorite Places
+              <SimpleRoute>
+                <ClientFavoritePlacesPage />
+              </SimpleRoute>
+            } />
+            <Route path="/client/ride-receipt" element={ // New Route for Ride Receipt
+              <SimpleRoute>
+                <ClientRideReceiptPage />
+              </SimpleRoute>
+            } />
+            <Route path="/client/report-issue" element={ // New Route for Report Issue
+              <SimpleRoute>
+                <ClientReportIssuePage />
               </SimpleRoute>
             } />
             
