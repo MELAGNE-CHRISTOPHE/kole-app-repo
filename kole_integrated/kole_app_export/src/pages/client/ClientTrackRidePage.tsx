@@ -16,9 +16,11 @@ import {
 import { MapPin, Navigation, Phone, MessageCircle, Star, Loader2, AlertTriangle, Share2 } from 'lucide-react'; // Added Share2
 import MapComponent, { Marker } from '../../components/MapComponent';
 import * as rideService from '../../services/rideService';
-import * as emergencyService from '../../services/emergencyService'; // Import emergencyService
+import * as mapService from '../../services/mapService'; // Added mapService
+import * as emergencyService from '../../services/emergencyService';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import type { GeoJSONFeature } from 'mapbox-gl'; // For routeGeoJSON typing
 
 const ClientTrackRidePage: React.FC = () => {
   const { t } = useTranslation();
@@ -59,6 +61,10 @@ const ClientTrackRidePage: React.FC = () => {
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
   const [isCancellingRide, setIsCancellingRide] = useState(false);
   const stopLocationUpdatesRef = useRef<(() => void) | null>(null);
+
+  // Detailed Route State
+  const [currentRouteGeoJSON, setCurrentRouteGeoJSON] = useState<GeoJSONFeature | null>(null);
+  const [isFetchingTrackRoute, setIsFetchingTrackRoute] = useState(false);
 
   useEffect(() => {
     if (!bookingId || !driverStaticDetails || !rideDetails.pickup?.coordinates || !rideDetails.destination?.coordinates) {
@@ -138,6 +144,79 @@ const ClientTrackRidePage: React.FC = () => {
       if (timerIntervalId) clearInterval(timerIntervalId);
     };
   }, [currentRideStatus, waitingTimer]);
+
+  const fetchAndDisplayRouteForLeg = async (
+    originCoords: { latitude: number; longitude: number },
+    targetCoords: { latitude: number; longitude: number }
+  ) => {
+    setIsFetchingTrackRoute(true);
+    try {
+      const result = await mapService.getMapboxDirections(
+        [originCoords.longitude, originCoords.latitude],
+        [targetCoords.longitude, targetCoords.latitude]
+      );
+      if (result.data && result.data.geometry) {
+        setCurrentRouteGeoJSON({
+          type: 'Feature',
+          geometry: result.data.geometry,
+          properties: {},
+        } as GeoJSONFeature); // Type assertion
+        if (result.data.duration && currentRideStatus !== 'WAITING_AT_PICKUP') { // Don't overwrite ETA if driver is waiting
+          setCurrentEta(`~${Math.round(result.data.duration / 60)} min`);
+        }
+      } else if (result.error) {
+        toast.error(t(result.error.messageKey || 'mapService.errors.directionsFailed'));
+        setCurrentRouteGeoJSON(null); // Clear old route on error
+      }
+    } catch (error) {
+      console.error("Error fetching route for leg:", error);
+      toast.error(t('mapService.errors.directionsFailed'));
+      setCurrentRouteGeoJSON(null);
+    } finally {
+      setIsFetchingTrackRoute(false);
+    }
+  };
+
+  // Effect to fetch route when driver location or ride status changes
+  useEffect(() => {
+    if (!liveDriverLocation || !currentRideStatus || !rideDetails.pickup?.coordinates || !rideDetails.destination?.coordinates) {
+      return;
+    }
+
+    let targetCoords;
+    if (currentRideStatus === 'TO_CLIENT' || currentRideStatus === 'WAITING_AT_PICKUP') {
+      targetCoords = rideDetails.pickup.coordinates;
+    } else if (currentRideStatus === 'IN_PROGRESS_TO_DESTINATION') {
+      targetCoords = rideDetails.destination.coordinates;
+    } else {
+      // For ARRIVED or other states, clear the actively fetched route.
+      // A static full route might be shown if desired, but that's separate.
+      setCurrentRouteGeoJSON(null);
+      return;
+    }
+    // Avoid fetching if driver is at the target already for TO_CLIENT/WAITING (e.g. at pickup)
+    // or at destination for IN_PROGRESS
+    const R_EARTH = 6371e3; // metres
+    const lat1 = liveDriverLocation.latitude * Math.PI/180;
+    const lat2 = targetCoords.latitude * Math.PI/180;
+    const deltaLat = (targetCoords.latitude-liveDriverLocation.latitude) * Math.PI/180;
+    const deltaLng = (targetCoords.longitude-liveDriverLocation.longitude) * Math.PI/180;
+    const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R_EARTH * c; // in metres
+
+    if (distance > 50) { // Only fetch if driver is more than 50m away from current leg's target
+        fetchAndDisplayRouteForLeg(liveDriverLocation, targetCoords);
+    } else if (currentRideStatus === 'TO_CLIENT') { // If close to pickup, and status is TO_CLIENT, it implies arrival at pickup
+        // Potentially redundant if service updates status quickly, but can help UI feel responsive
+        // setCurrentRideStatus('WAITING_AT_PICKUP'); // This might conflict with service push
+    }
+
+
+  }, [liveDriverLocation, currentRideStatus, rideDetails.pickup, rideDetails.destination, t]);
+
 
   const formatWaitingTime = () => {
     if (waitingTimer === null) return '00:00';
@@ -264,8 +343,13 @@ const ClientTrackRidePage: React.FC = () => {
     // Reset ETA for the next leg of the journey (driver to destination)
     // This should ideally come from the service based on the new leg.
     // For now, we might just clear it or set a placeholder.
-    setCurrentEta(null); // Or fetch new ETA from service if possible
+    // setCurrentEta(null); // ETA will be updated by fetchAndDisplayRouteForLeg
     setWaitingTimer(null); // Stop and clear waiting timer
+
+    // Fetch route for the next leg (driver at pickup to destination)
+    if (liveDriverLocation && rideDetails.destination?.coordinates) {
+      fetchAndDisplayRouteForLeg(liveDriverLocation, rideDetails.destination.coordinates);
+    }
   };
 
   const mapMarkers: Marker[] = [];
@@ -275,29 +359,7 @@ const ClientTrackRidePage: React.FC = () => {
   if (rideDetails.destination?.coordinates) {
     mapMarkers.push({ id: 'destination', latitude: rideDetails.destination.coordinates.latitude, longitude: rideDetails.destination.coordinates.longitude, color: '#22C55E', title: t('clientTrackRidePage.markerTitles.destination') });
   }
-
-  let routeForMap;
-  if (liveDriverLocation && rideDetails.pickup?.coordinates && rideDetails.destination?.coordinates) {
-    if (currentRideStatus === 'TO_CLIENT' || currentRideStatus === 'WAITING_AT_PICKUP') {
-      routeForMap = {
-        origin: [liveDriverLocation.longitude, liveDriverLocation.latitude],
-        destination: [rideDetails.pickup.coordinates.longitude, rideDetails.pickup.coordinates.latitude]
-      };
-    } else if (currentRideStatus === 'IN_PROGRESS_TO_DESTINATION') {
-      // If waiting, driver is at pickup, so route is from pickup to destination
-      const originLng = currentRideStatus === 'WAITING_AT_PICKUP' ? rideDetails.pickup.coordinates.longitude : liveDriverLocation.longitude;
-      const originLat = currentRideStatus === 'WAITING_AT_PICKUP' ? rideDetails.pickup.coordinates.latitude : liveDriverLocation.latitude;
-      routeForMap = {
-        origin: [originLng, originLat],
-        destination: [rideDetails.destination.coordinates.longitude, rideDetails.destination.coordinates.latitude]
-      };
-    } else if (currentRideStatus === 'ARRIVED_AT_DESTINATION') {
-       routeForMap = {
-        origin: [rideDetails.pickup.coordinates.longitude, rideDetails.pickup.coordinates.latitude],
-        destination: [rideDetails.destination.coordinates.longitude, rideDetails.destination.coordinates.latitude]
-      };
-    }
-  }
+  // const routeForMap variable and its logic can be removed as currentRouteGeoJSON is now used.
 
   let pageTitle = t('clientTrackRidePage.titleToClient');
   let statusMessage = driverStaticDetails ? t('clientTrackRidePage.statusMessageToClient', { driverName: driverStaticDetails.name, eta: currentEta || '...' }) : "";
@@ -341,7 +403,7 @@ const ClientTrackRidePage: React.FC = () => {
                 driverLatitude={liveDriverLocation.latitude}
                 driverLongitude={liveDriverLocation.longitude}
                 markers={mapMarkers}
-                route={routeForMap}
+                routeGeoJSON={currentRouteGeoJSON} // Use detailed GeoJSON route
             />
         ) : (
              <div className="w-full h-full flex items-center justify-center bg-kole-cream-light">
@@ -350,7 +412,8 @@ const ClientTrackRidePage: React.FC = () => {
             </div>
         )}
         
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-white px-4 py-2 rounded-full shadow-md text-kole-text-primary">
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-white px-4 py-2 rounded-full shadow-md text-kole-text-primary flex items-center">
+          {isFetchingTrackRoute && <Loader2 className="h-4 w-4 animate-spin text-kole-blue-primary mr-2" />}
           <p className="text-sm font-medium text-center">{statusMessage}</p>
         </div>
       </div>

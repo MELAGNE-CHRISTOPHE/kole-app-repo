@@ -29,9 +29,10 @@ const ClientSearchingDriverPage: React.FC = () => {
 
   const [driverFound, setDriverFound] = useState(false);
   const [driverDetails, setDriverDetails] = useState<rideService.DriverData | null>(null);
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false); // For the small loader icon next to text
   const [isCancelling, setIsCancelling] = useState(false);
-  const [searchTimer, setSearchTimer] = useState(0); // Optional: to show elapsed time
+  const [searchTimer, setSearchTimer] = useState(0);
+  const [fetchAttemptCount, setFetchAttemptCount] = useState(0); // New state for error/attempt counting
 
   useEffect(() => {
     if (!bookingId) {
@@ -40,21 +41,32 @@ const ClientSearchingDriverPage: React.FC = () => {
       return;
     }
 
-    setIsCheckingStatus(true);
+    // setIsCheckingStatus(true); // Initial check can be considered part of page load, main spinner is enough
+    let currentFetchAttempts = 0; // Local variable for attempts within this effect's lifetime
+
     const intervalId = setInterval(async () => {
+      currentFetchAttempts++;
+      setFetchAttemptCount(currentFetchAttempts); // Update state for potential use elsewhere if needed
       setSearchTimer(prev => prev + POLLING_INTERVAL / 1000);
+      setIsCheckingStatus(true); // Indicate active poll
+
       const result = await rideService.getBookingStatus(bookingId);
-      setIsCheckingStatus(false); // Stop general loading indicator after first poll response
+      setIsCheckingStatus(false); // Poll finished
 
       if (result.error) {
         toast.error(t(result.error.messageKey, { details: result.error.details }));
-        // Consider stopping polling on certain errors, or implement backoff
-        // For now, continue polling or let user cancel
+        if (result.error.messageKey === 'rideService.errors.bookingNotFound' || currentFetchAttempts >= 5) {
+          clearInterval(intervalId);
+          // Optionally set a page-level error state here to offer a "Try Again" button
+          // For now, toast is the main feedback and polling stops.
+          console.log(`Polling stopped due to: ${result.error.messageKey} or max attempts reached.`);
+        }
       } else if (result.data) {
         if (result.data.status === 'DRIVER_FOUND' && result.data.driverDetails) {
           setDriverDetails(result.data.driverDetails);
           setDriverFound(true);
-          clearInterval(intervalId); // Stop polling
+          setFetchAttemptCount(0); // Reset on success
+          clearInterval(intervalId);
           setTimeout(() => {
             navigate('/client/track-ride', {
               state: {
@@ -66,10 +78,11 @@ const ClientSearchingDriverPage: React.FC = () => {
           }, DRIVER_FOUND_REDIRECT_DELAY);
         } else if (result.data.status === 'SEARCHING_FOR_DRIVER') {
           // Continue polling, driver not yet found
-          setIsCheckingStatus(true); // Re-enable for next poll if desired, or rely on main spinner
+          // setIsCheckingStatus(true); // Status is set at the start of the interval work
         } else {
           // Handle other statuses if any, or treat as error/still searching
           console.warn("Unhandled booking status:", result.data.status);
+          // If unhandled status persists, it will eventually hit fetchAttemptCount limit
         }
       }
     }, POLLING_INTERVAL);
@@ -114,9 +127,12 @@ const ClientSearchingDriverPage: React.FC = () => {
               {/* Assuming a symbol logo exists, otherwise use a generic icon or remove */}
               <img src="/assets/kole_logo_principal.png" alt={t('authLayout.koleLogoAlt')} className="w-12 h-12 relative z-10" />
             </div>
-            <h2 className="text-xl font-bold mb-2 text-kole-text-primary">{t('clientSearchingDriverPage.loadingMessage')}</h2>
+            <h2 className="text-xl font-bold mb-2 text-kole-text-primary">
+              {t('clientSearchingDriverPage.loadingMessage')}
+              {isCheckingStatus && <Loader2 className="inline h-5 w-5 animate-spin ml-2 text-kole-blue-primary" />}
+            </h2>
             <p className="text-kole-text-secondary mb-6 text-center">{t('clientSearchingDriverPage.pleaseWait')}</p>
-            {isCheckingStatus && searchTimer > 0 && <p className="text-sm text-kole-text-tertiary">{t('clientSearchingDriverPage.searchTime', { time: searchTimer })}</p>}
+            {searchTimer > 0 && <p className="text-sm text-kole-text-tertiary">{t('clientSearchingDriverPage.searchTime', { time: searchTimer })}</p>}
           </>
         ) : driverDetails ? (
           <div className="w-full max-w-md animate-fade-in">
