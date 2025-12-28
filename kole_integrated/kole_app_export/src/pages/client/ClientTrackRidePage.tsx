@@ -1,430 +1,574 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { MapPin, Navigation, Phone, MessageCircle, Clock } from 'lucide-react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-
-// Configuration de Mapbox
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_API_KEY || 'pk.eyJ1Ijoia29sZWFwcCIsImEiOiJjbHpzOWdwcXUwMXpqMnFwYTJkNjRlYmRuIn0.VD7jlOAfuReKlMRAm7c47g';
+import { Card, CardContent } from '../../components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { MapPin, Navigation, Phone, MessageCircle, Star, Loader2, AlertTriangle, Share2 } from 'lucide-react'; // Added Share2
+import MapComponent, { Marker } from '../../components/MapComponent';
+import * as rideService from '../../services/rideService';
+import * as mapService from '../../services/mapService'; // Added mapService
+import * as emergencyService from '../../services/emergencyService';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import type { GeoJSONFeature } from 'mapbox-gl'; // For routeGeoJSON typing
 
 const ClientTrackRidePage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const driverMarker = useRef<mapboxgl.Marker | null>(null);
-  const clientMarker = useRef<mapboxgl.Marker | null>(null);
-  const destinationMarker = useRef<mapboxgl.Marker | null>(null);
-  
-  const rideDetails = location.state || {
-    pickup: { 
-      coordinates: { latitude: 5.341, longitude: -4.017 },
-      address: 'Position actuelle' 
-    },
-    destination: { 
-      coordinates: { latitude: 5.345, longitude: -4.025 },
-      address: 'Destination' 
-    },
-    price: 700,
-    estimatedTime: '10 min',
-    driver: {
-      name: 'Konan Kouadio',
-      rating: 4.8,
-      vehicle: 'Honda PCX',
-      plate: 'AB 1234 CD',
-      arrivalTime: '3 min',
-      photo: 'https://randomuser.me/api/portraits/men/32.jpg',
-      phone: '+225 07 12 34 56'
-    }
-  };
-  
-  const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number}>({
-    latitude: 5.339,
-    longitude: -4.019
+  const locationHook = useLocation();
+
+  const {
+    rideDetails: initialRideDetails,
+    driver: initialDriverDetails,
+    bookingId: navBookingId
+  } = locationHook.state || {};
+
+  const [rideDetails] = useState(initialRideDetails || {
+    pickup: { coordinates: { latitude: 5.3410, longitude: -4.0170 }, address: t('clientTrackRidePage.defaultPickup') },
+    destination: { coordinates: { latitude: 5.3450, longitude: -4.0250 }, address: t('clientTrackRidePage.defaultDestination') },
+    price: 0,
+    estimatedTime: 'N/A', // This might be initial estimate, live ETA will update
   });
-  const [rideStatus, setRideStatus] = useState<'to_client' | 'waiting' | 'in_progress' | 'arrived'>('to_client');
+
+  const [driverStaticDetails] = useState<rideService.DriverData | null>(initialDriverDetails || null);
+  const [bookingId] = useState<string | null>(navBookingId || null);
+  
+  const [liveDriverLocation, setLiveDriverLocation] = useState<{latitude: number, longitude: number} | null>(
+    initialDriverDetails ? { latitude: initialDriverDetails.latitude, longitude: initialDriverDetails.longitude } : null // Start with initial driver loc if passed
+  );
+  const [currentRideStatus, setCurrentRideStatus] = useState<rideService.RideStatus | null>(null);
+  const [currentEta, setCurrentEta] = useState<string | null>(initialDriverDetails?.arrivalTime || rideDetails.estimatedTime);
+  
   const [waitingTimer, setWaitingTimer] = useState<number | null>(null);
   const [extraCharge, setExtraCharge] = useState(0);
-  const [arrivalNotified, setArrivalNotified] = useState(false);
-  
-  // Initialiser la carte
+  const [isLoading, setIsLoading] = useState(true);
+
+  // SOS State
+  const [showSosConfirmDialog, setShowSosConfirmDialog] = useState(false);
+  const [isActivatingSos, setIsActivatingSos] = useState(false);
+
+  // Cancel Ride State
+  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
+  const [isCancellingRide, setIsCancellingRide] = useState(false);
+  const stopLocationUpdatesRef = useRef<(() => void) | null>(null);
+
+  // Detailed Route State
+  const [currentRouteGeoJSON, setCurrentRouteGeoJSON] = useState<GeoJSONFeature | null>(null);
+  const [isFetchingTrackRoute, setIsFetchingTrackRoute] = useState(false);
+
   useEffect(() => {
-    if (mapContainer.current && !map.current) {
-      const { pickup, destination } = rideDetails;
-      
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/streets-v11',
-        center: [driverLocation.longitude, driverLocation.latitude],
-        zoom: 14
-      });
-      
-      map.current.on('load', () => {
-        // Ajouter les marqueurs
-        driverMarker.current = new mapboxgl.Marker({ color: '#0052FF' })
-          .setLngLat([driverLocation.longitude, driverLocation.latitude])
-          .addTo(map.current!);
-          
-        clientMarker.current = new mapboxgl.Marker({ color: '#FF8C00' })
-          .setLngLat([pickup.coordinates.longitude, pickup.coordinates.latitude])
-          .addTo(map.current!);
-          
-        destinationMarker.current = new mapboxgl.Marker({ color: '#22C55E' })
-          .setLngLat([destination.coordinates.longitude, destination.coordinates.latitude])
-          .addTo(map.current!);
-        
-        // Ajuster la vue pour voir tous les points
-        const bounds = new mapboxgl.LngLatBounds()
-          .extend([driverLocation.longitude, driverLocation.latitude])
-          .extend([pickup.coordinates.longitude, pickup.coordinates.latitude])
-          .extend([destination.coordinates.longitude, destination.coordinates.latitude]);
-        
-        map.current!.fitBounds(bounds, {
-          padding: 100
-        });
-        
-        // Tracer l'itinéraire initial (chauffeur vers client)
-        getRoute(
-          map.current!, 
-          [driverLocation.longitude, driverLocation.latitude], 
-          [pickup.coordinates.longitude, pickup.coordinates.latitude]
-        );
-      });
+    if (!bookingId || !driverStaticDetails || !rideDetails.pickup?.coordinates || !rideDetails.destination?.coordinates) {
+      toast.error(t('rideService.errors.bookingNotFound'));
+      navigate('/client');
+      return;
     }
+
+    // Use initial driver location from navigation state if available, otherwise use a fallback for simulation
+    const initialSimDriverLat = liveDriverLocation?.latitude || rideDetails.pickup.coordinates.latitude - 0.02; // Start driver bit away
+    const initialSimDriverLng = liveDriverLocation?.longitude || rideDetails.pickup.coordinates.longitude - 0.02;
+
+    setIsLoading(false); // Assuming initial data is enough to show map, service will update live.
     
+    const cleanupSubscription = rideService.getDriverLocationUpdates(
+      bookingId,
+      (update) => {
+        console.log("Driver update received:", update);
+        setLiveDriverLocation({ latitude: update.latitude, longitude: update.longitude });
+        if (update.eta) setCurrentEta(update.eta);
+        setCurrentRideStatus(update.rideStatus);
+
+        if (update.rideStatus === 'WAITING_AT_PICKUP' && waitingTimer === null) {
+            // Driver just arrived, start the 3-minute free waiting timer
+            setWaitingTimer(180);
+        }
+      },
+      { lat: initialSimDriverLat, lng: initialSimDriverLng },
+      { lat: rideDetails.pickup.coordinates.latitude, lng: rideDetails.pickup.coordinates.longitude },
+      { lat: rideDetails.destination.coordinates.latitude, lng: rideDetails.destination.coordinates.longitude }
+    );
+    stopLocationUpdatesRef.current = cleanupSubscription;
+
     return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
+      if (stopLocationUpdatesRef.current) {
+        stopLocationUpdatesRef.current();
       }
     };
-  }, []);
-  
-  // Simuler le mouvement du chauffeur
+  }, [bookingId, driverStaticDetails, rideDetails, navigate, t]);
+
   useEffect(() => {
-    let interval: number;
-    
-    if (rideStatus === 'to_client') {
-      // Simuler le mouvement du chauffeur vers le client
-      interval = window.setInterval(() => {
-        setDriverLocation(prev => {
-          const { pickup } = rideDetails;
-          
-          // Calculer la nouvelle position (se rapprocher du client)
-          const newLat = prev.latitude + (pickup.coordinates.latitude - prev.latitude) * 0.1;
-          const newLng = prev.longitude + (pickup.coordinates.longitude - prev.longitude) * 0.1;
-          
-          // Mettre à jour le marqueur du chauffeur
-          if (driverMarker.current && map.current) {
-            driverMarker.current.setLngLat([newLng, newLat]);
-            
-            // Mettre à jour l'itinéraire
-            getRoute(
-              map.current, 
-              [newLng, newLat], 
-              [pickup.coordinates.longitude, pickup.coordinates.latitude]
-            );
+    if (currentRideStatus === 'ARRIVED_AT_DESTINATION') {
+      setTimeout(() => {
+        navigate('/client/rate-ride', {
+          state: {
+            rideDetails, // This should include the final price with extra charges
+            driver: driverStaticDetails,
+            bookingId,
+            extraCharge
           }
-          
-          // Vérifier si le chauffeur est arrivé près du client
-          const distance = calculateDistance(
-            newLat, newLng,
-            pickup.coordinates.latitude, pickup.coordinates.longitude
-          );
-          
-          if (distance < 0.0005 && !arrivalNotified) { // ~50 mètres
-            setRideStatus('waiting');
-            setWaitingTimer(180); // 3 minutes en secondes
-            setArrivalNotified(true);
-            clearInterval(interval);
-          }
-          
-          return { latitude: newLat, longitude: newLng };
         });
-      }, 1000);
-    } else if (rideStatus === 'in_progress') {
-      // Simuler le mouvement du chauffeur vers la destination
-      interval = window.setInterval(() => {
-        setDriverLocation(prev => {
-          const { destination } = rideDetails;
-          
-          // Calculer la nouvelle position (se rapprocher de la destination)
-          const newLat = prev.latitude + (destination.coordinates.latitude - prev.latitude) * 0.05;
-          const newLng = prev.longitude + (destination.coordinates.longitude - prev.longitude) * 0.05;
-          
-          // Mettre à jour le marqueur du chauffeur
-          if (driverMarker.current && map.current) {
-            driverMarker.current.setLngLat([newLng, newLat]);
-            
-            // Mettre à jour l'itinéraire
-            getRoute(
-              map.current, 
-              [newLng, newLat], 
-              [destination.coordinates.longitude, destination.coordinates.latitude]
-            );
-          }
-          
-          // Vérifier si le chauffeur est arrivé à destination
-          const distance = calculateDistance(
-            newLat, newLng,
-            destination.coordinates.latitude, destination.coordinates.longitude
-          );
-          
-          if (distance < 0.0005) { // ~50 mètres
-            setRideStatus('arrived');
-            clearInterval(interval);
-            
-            // Rediriger vers la page d'évaluation après 2 secondes
-            setTimeout(() => {
-              navigate('/client/rate-ride', {
-                state: {
-                  ...rideDetails,
-                  extraCharge
-                }
-              });
-            }, 2000);
-          }
-          
-          return { latitude: newLat, longitude: newLng };
-        });
-      }, 1000);
+      }, 3000);
     }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [rideStatus, arrivalNotified]);
-  
-  // Gérer le timer d'attente
+  }, [currentRideStatus, navigate, rideDetails, driverStaticDetails, bookingId, extraCharge]);
+
   useEffect(() => {
-    let interval: number;
-    
-    if (rideStatus === 'waiting' && waitingTimer !== null) {
-      interval = window.setInterval(() => {
+    let timerIntervalId: number | undefined = undefined;
+    if (currentRideStatus === 'WAITING_AT_PICKUP' && waitingTimer !== null) {
+      timerIntervalId = window.setInterval(() => {
         setWaitingTimer(prev => {
           if (prev === null) return null;
-          
-          const newTime = prev - 1;
-          
-          // Ajouter des frais supplémentaires toutes les minutes après les 3 minutes initiales
-          if (newTime % 60 === 0 && newTime < 0) {
-            setExtraCharge(prev => prev + 50);
-          }
-          
-          return newTime;
-        });
-      }, 1000);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [rideStatus, waitingTimer]);
-  
-  // Obtenir et afficher l'itinéraire
-  const getRoute = async (map: mapboxgl.Map, start: [number, number], end: [number, number]) => {
-    try {
-      const query = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
-      );
-      const json = await query.json();
-      const data = json.routes[0];
-      const route = data.geometry.coordinates;
-      
-      // Ajouter la source de données pour l'itinéraire
-      if (!map.getSource('route')) {
-        map.addSource('route', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            properties: {},
-            geometry: {
-              type: 'LineString',
-              coordinates: route
+          if (prev <= 0) { // Free waiting time is over
+            const timeOver = Math.abs(prev);
+            if (timeOver > 0 && timeOver % 60 === 0) { // Charge per minute after free time
+              setExtraCharge(c => c + 50);
             }
           }
+          return prev - 1;
         });
-        
-        // Ajouter la couche pour afficher l'itinéraire
-        map.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#0052FF',
-            'line-width': 5,
-            'line-opacity': 0.75
-          }
-        });
-      } else {
-        // Mettre à jour l'itinéraire existant
-        map.getSource('route').setData({
+      }, 1000);
+    } else if (currentRideStatus !== 'WAITING_AT_PICKUP' && waitingTimer !== null) {
+        // If status changes from waiting, ensure timer is cleared if it was running.
+        // This might be redundant if confirmPresence clears it, but good as a safeguard.
+        setWaitingTimer(null);
+    }
+    return () => {
+      if (timerIntervalId) clearInterval(timerIntervalId);
+    };
+  }, [currentRideStatus, waitingTimer]);
+
+  const fetchAndDisplayRouteForLeg = async (
+    originCoords: { latitude: number; longitude: number },
+    targetCoords: { latitude: number; longitude: number }
+  ) => {
+    setIsFetchingTrackRoute(true);
+    try {
+      const result = await mapService.getMapboxDirections(
+        [originCoords.longitude, originCoords.latitude],
+        [targetCoords.longitude, targetCoords.latitude]
+      );
+      if (result.data && result.data.geometry) {
+        setCurrentRouteGeoJSON({
           type: 'Feature',
+          geometry: result.data.geometry,
           properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: route
-          }
-        });
+        } as GeoJSONFeature); // Type assertion
+        if (result.data.duration && currentRideStatus !== 'WAITING_AT_PICKUP') { // Don't overwrite ETA if driver is waiting
+          setCurrentEta(`~${Math.round(result.data.duration / 60)} min`);
+        }
+      } else if (result.error) {
+        toast.error(t(result.error.messageKey || 'mapService.errors.directionsFailed'));
+        setCurrentRouteGeoJSON(null); // Clear old route on error
       }
     } catch (error) {
-      console.error("Erreur lors de la récupération de l'itinéraire:", error);
+      console.error("Error fetching route for leg:", error);
+      toast.error(t('mapService.errors.directionsFailed'));
+      setCurrentRouteGeoJSON(null);
+    } finally {
+      setIsFetchingTrackRoute(false);
     }
   };
-  
-  // Calculer la distance entre deux points (formule de Haversine simplifiée)
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    return Math.sqrt(Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2));
-  };
-  
-  // Formater le temps d'attente
+
+  // Effect to fetch route when driver location or ride status changes
+  useEffect(() => {
+    if (!liveDriverLocation || !currentRideStatus || !rideDetails.pickup?.coordinates || !rideDetails.destination?.coordinates) {
+      return;
+    }
+
+    let targetCoords;
+    if (currentRideStatus === 'TO_CLIENT' || currentRideStatus === 'WAITING_AT_PICKUP') {
+      targetCoords = rideDetails.pickup.coordinates;
+    } else if (currentRideStatus === 'IN_PROGRESS_TO_DESTINATION') {
+      targetCoords = rideDetails.destination.coordinates;
+    } else {
+      // For ARRIVED or other states, clear the actively fetched route.
+      // A static full route might be shown if desired, but that's separate.
+      setCurrentRouteGeoJSON(null);
+      return;
+    }
+    // Avoid fetching if driver is at the target already for TO_CLIENT/WAITING (e.g. at pickup)
+    // or at destination for IN_PROGRESS
+    const R_EARTH = 6371e3; // metres
+    const lat1 = liveDriverLocation.latitude * Math.PI/180;
+    const lat2 = targetCoords.latitude * Math.PI/180;
+    const deltaLat = (targetCoords.latitude-liveDriverLocation.latitude) * Math.PI/180;
+    const deltaLng = (targetCoords.longitude-liveDriverLocation.longitude) * Math.PI/180;
+    const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R_EARTH * c; // in metres
+
+    if (distance > 50) { // Only fetch if driver is more than 50m away from current leg's target
+        fetchAndDisplayRouteForLeg(liveDriverLocation, targetCoords);
+    } else if (currentRideStatus === 'TO_CLIENT') { // If close to pickup, and status is TO_CLIENT, it implies arrival at pickup
+        // Potentially redundant if service updates status quickly, but can help UI feel responsive
+        // setCurrentRideStatus('WAITING_AT_PICKUP'); // This might conflict with service push
+    }
+
+
+  }, [liveDriverLocation, currentRideStatus, rideDetails.pickup, rideDetails.destination, t]);
+
+
   const formatWaitingTime = () => {
     if (waitingTimer === null) return '00:00';
-    
-    const minutes = Math.floor(Math.abs(waitingTimer) / 60);
-    const seconds = Math.abs(waitingTimer) % 60;
+    const absTimer = Math.abs(waitingTimer);
+    const minutes = Math.floor(absTimer / 60);
+    const seconds = absTimer % 60;
     const sign = waitingTimer < 0 ? '-' : '';
     return `${sign}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
   
-  // Appeler le chauffeur
   const callDriver = () => {
-    if (rideDetails.driver.phone) {
-      window.location.href = `tel:${rideDetails.driver.phone}`;
-    }
+    if (driverStaticDetails?.phone) window.location.href = `tel:${driverStaticDetails.phone}`;
   };
-  
-  // Confirmer la présence du client
-  const confirmPresence = () => {
-    setRideStatus('in_progress');
-    
-    // Mettre à jour l'itinéraire vers la destination
-    if (map.current) {
-      const { destination } = rideDetails;
-      getRoute(
-        map.current, 
-        [driverLocation.longitude, driverLocation.latitude], 
-        [destination.coordinates.longitude, destination.coordinates.latitude]
-      );
+
+  const handleShareRide = async () => {
+    if (!bookingId || !rideDetails || !driverStaticDetails) {
+      toast.info(t('clientTrackRidePage.toasts.shareNotReady', "Les détails du trajet ne sont pas encore prêts pour le partage."));
+      return;
+    }
+
+    const rideTrackUrl = `https://kole.africa/track?id=${bookingId}`; // Conceptual URL
+    const shareData = {
+      title: t('clientTrackRidePage.shareContent.title'),
+      text: t('clientTrackRidePage.shareContent.text', {
+        destinationAddress: rideDetails.destination?.address || t('clientTrackRidePage.shareContent.unknownDestination', "destination inconnue"),
+        driverName: driverStaticDetails.name || t('clientTrackRidePage.shareContent.yourKoleDriver', "votre chauffeur Kôlê"),
+        rideTrackUrl: rideTrackUrl,
+      }),
+      url: rideTrackUrl,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        toast.success(t('clientTrackRidePage.toasts.shareSuccessful'));
+      } catch (err) {
+        console.error('Share failed:', err);
+        if ((err as Error).name !== 'AbortError') { // Don't toast if user cancelled
+          toast.error(t('clientTrackRidePage.toasts.shareFailed', { error: (err as Error).message }));
+        }
+      }
+    } else {
+      // Fallback: Copy link to clipboard
+      try {
+        await navigator.clipboard.writeText(rideTrackUrl);
+        toast.success(t('clientTrackRidePage.toasts.clipboardCopySuccess'));
+      } catch (err) {
+        console.error('Clipboard copy failed:', err);
+        toast.error(t('clientTrackRidePage.toasts.clipboardCopyFailed'));
+      }
     }
   };
 
+  const handleSosConfirm = async () => {
+    if (!bookingId) {
+      toast.error(t('rideService.errors.bookingNotFound')); // Or a more generic SOS error
+      return;
+    }
+    // Determine current location for SOS
+    const currentLocation = liveDriverLocation
+      ? { latitude: liveDriverLocation.latitude, longitude: liveDriverLocation.longitude }
+      : (rideDetails.pickup?.coordinates || { latitude: 0, longitude: 0 }); // Fallback if no live location
+
+    setIsActivatingSos(true);
+    const toastId = toast.loading(t('clientTrackRidePage.toasts.sosActivationInProgress'));
+
+    try {
+      const result = await emergencyService.triggerSOS(bookingId, currentLocation);
+      toast.dismiss(toastId);
+
+      if (result.error) {
+        toast.error(t(result.error.messageKey, { details: result.error.details }));
+      } else if (result.data?.success) {
+        toast.success(t(result.data.messageKey || 'emergencyService.success.sosActivated'));
+        // Potentially further UI changes or navigation, out of scope for this task
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error(t('emergencyService.errors.sosFailed'));
+      console.error("SOS activation unexpected error:", error);
+    } finally {
+      setShowSosConfirmDialog(false);
+      setIsActivatingSos(false);
+    }
+  };
+
+  const handleCancelRideConfirm = async () => {
+    if (!bookingId) {
+      toast.error(t('rideService.errors.bookingNotFound'));
+      return;
+    }
+    setIsCancellingRide(true);
+    const toastId = toast.loading(t('clientTrackRidePage.toasts.cancelRideInProgress'));
+
+    try {
+      const result = await rideService.cancelRideRequest(bookingId);
+      toast.dismiss(toastId);
+
+      if (result.error) {
+        toast.error(t(result.error.messageKey || 'rideService.errors.cancelRideFailed'));
+      } else if (result.data?.success) {
+        toast.success(t(result.data.messageKey || 'rideService.success.rideCancelled'));
+        if (stopLocationUpdatesRef.current) {
+          stopLocationUpdatesRef.current(); // Stop listening to location updates
+        }
+        navigate('/client'); // Navigate to main map or dashboard
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error(t('rideService.errors.cancelRideFailed'));
+      console.error("Cancel ride unexpected error:", error);
+    } finally {
+      setShowCancelConfirmDialog(false);
+      setIsCancellingRide(false);
+    }
+  };
+  
+  const confirmPresence = () => {
+    // This action now primarily updates the local state to reflect the client is ready.
+    // The service simulation `getDriverLocationUpdates` will see this change if it checks `mockBooking.status`
+    // or this page could send a specific event to a real backend.
+    // For the mock, we directly influence the state that the service's simulation might also be trying to set.
+    setCurrentRideStatus('IN_PROGRESS_TO_DESTINATION');
+    // Reset ETA for the next leg of the journey (driver to destination)
+    // This should ideally come from the service based on the new leg.
+    // For now, we might just clear it or set a placeholder.
+    // setCurrentEta(null); // ETA will be updated by fetchAndDisplayRouteForLeg
+    setWaitingTimer(null); // Stop and clear waiting timer
+
+    // Fetch route for the next leg (driver at pickup to destination)
+    if (liveDriverLocation && rideDetails.destination?.coordinates) {
+      fetchAndDisplayRouteForLeg(liveDriverLocation, rideDetails.destination.coordinates);
+    }
+  };
+
+  const mapMarkers: Marker[] = [];
+  if (rideDetails.pickup?.coordinates) {
+    mapMarkers.push({ id: 'pickup', latitude: rideDetails.pickup.coordinates.latitude, longitude: rideDetails.pickup.coordinates.longitude, color: '#FF8C00', title: t('clientTrackRidePage.markerTitles.pickup') });
+  }
+  if (rideDetails.destination?.coordinates) {
+    mapMarkers.push({ id: 'destination', latitude: rideDetails.destination.coordinates.latitude, longitude: rideDetails.destination.coordinates.longitude, color: '#22C55E', title: t('clientTrackRidePage.markerTitles.destination') });
+  }
+  // const routeForMap variable and its logic can be removed as currentRouteGeoJSON is now used.
+
+  let pageTitle = t('clientTrackRidePage.titleToClient');
+  let statusMessage = driverStaticDetails ? t('clientTrackRidePage.statusMessageToClient', { driverName: driverStaticDetails.name, eta: currentEta || '...' }) : "";
+
+  if (currentRideStatus === 'WAITING_AT_PICKUP') {
+    pageTitle = t('clientTrackRidePage.titleWaiting');
+    statusMessage = driverStaticDetails ? t('clientTrackRidePage.statusMessageWaiting', { driverName: driverStaticDetails.name }) : "";
+  } else if (currentRideStatus === 'IN_PROGRESS_TO_DESTINATION') {
+    pageTitle = t('clientTrackRidePage.titleInProgress');
+    statusMessage = t('clientTrackRidePage.statusMessageInProgress', { destinationAddress: rideDetails.destination.address, eta: currentEta || '...' });
+  } else if (currentRideStatus === 'ARRIVED_AT_DESTINATION') {
+    pageTitle = t('clientTrackRidePage.titleArrived');
+    statusMessage = t('clientTrackRidePage.statusMessageArrived', { destinationAddress: rideDetails.destination.address });
+  }
+
+
+  if (isLoading && !liveDriverLocation) { // Show full page loader only if initial driver location isn't even set
+    return (
+      <div className="h-screen flex flex-col bg-kole-cream-bg items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-kole-blue-primary mb-4" />
+        <p className="text-kole-text-secondary">{t('clientTrackRidePage.loadingInitial')}</p>
+      </div>
+    );
+  }
+
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* Barre d'état supérieure */}
-      <div className="bg-white shadow-sm p-4">
-        <h1 className="text-lg font-semibold text-gray-800">
-          {rideStatus === 'to_client' && 'Chauffeur en route'}
-          {rideStatus === 'waiting' && 'Chauffeur arrivé'}
-          {rideStatus === 'in_progress' && 'En route vers la destination'}
-          {rideStatus === 'arrived' && 'Arrivé à destination'}
-        </h1>
+    <div className="flex flex-col h-screen bg-kole-cream-bg">
+      <div className="bg-white shadow-sm p-4 border-b border-kole-border">
+        <h1 className="text-lg font-semibold text-kole-text-primary text-center">{pageTitle}</h1>
       </div>
       
-      {/* Carte */}
       <div className="flex-1 relative">
-        <div ref={mapContainer} className="w-full h-full" />
+        {liveDriverLocation ? (
+            <MapComponent
+                latitude={liveDriverLocation.latitude}
+                longitude={liveDriverLocation.longitude}
+                zoom={15}
+                style={{ width: '100%', height: '100%' }}
+                interactive={true}
+                driverLatitude={liveDriverLocation.latitude}
+                driverLongitude={liveDriverLocation.longitude}
+                markers={mapMarkers}
+                routeGeoJSON={currentRouteGeoJSON} // Use detailed GeoJSON route
+            />
+        ) : (
+             <div className="w-full h-full flex items-center justify-center bg-kole-cream-light">
+                <Loader2 className="h-8 w-8 text-kole-blue-primary animate-spin mr-2" />
+                <p className="text-kole-brown-dark font-semibold">{t('clientBookingPage.loadingMap')}</p> {/* Re-use existing key */}
+            </div>
+        )}
         
-        {/* Statut du trajet */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-white px-4 py-2 rounded-full shadow-md">
-          <p className="text-sm font-medium">
-            {rideStatus === 'to_client' && `${rideDetails.driver.name} arrive dans ${rideDetails.driver.arrivalTime}`}
-            {rideStatus === 'waiting' && 'Chauffeur en attente'}
-            {rideStatus === 'in_progress' && `En route vers ${rideDetails.destination.address}`}
-            {rideStatus === 'arrived' && 'Vous êtes arrivé à destination'}
-          </p>
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-white px-4 py-2 rounded-full shadow-md text-kole-text-primary flex items-center">
+          {isFetchingTrackRoute && <Loader2 className="h-4 w-4 animate-spin text-kole-blue-primary mr-2" />}
+          <p className="text-sm font-medium text-center">{statusMessage}</p>
         </div>
       </div>
       
-      {/* Panneau inférieur */}
-      <div className="bg-white border-t border-gray-200 p-4">
-        <Card>
+      <div className="bg-white border-t border-kole-border p-4">
+        <Card className="border-kole-border">
           <CardContent className="p-4">
-            {/* Informations du chauffeur */}
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 rounded-full overflow-hidden mr-3">
-                <img src={rideDetails.driver.photo} alt="Driver" className="w-full h-full object-cover" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold">{rideDetails.driver.name}</h3>
-                <div className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                  <span className="text-sm ml-1">{rideDetails.driver.rating}</span>
+            {driverStaticDetails && (
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 rounded-full overflow-hidden mr-3">
+                  <img src={driverStaticDetails.photo} alt={driverStaticDetails.name} className="w-full h-full object-cover" />
                 </div>
-                <p className="text-sm text-gray-500">{rideDetails.driver.vehicle} • {rideDetails.driver.plate}</p>
+                <div className="flex-1">
+                  <h3 className="font-bold text-kole-text-primary">{driverStaticDetails.name}</h3>
+                  <div className="flex items-center">
+                    <Star className="h-4 w-4 text-kole-orange-primary" fill="currentColor" />
+                    <span className="text-sm ml-1 text-kole-text-secondary">{driverStaticDetails.rating}</span>
+                  </div>
+                  <p className="text-sm text-kole-text-secondary">{driverStaticDetails.vehicle} • {driverStaticDetails.plate}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="icon" onClick={callDriver} className="border-kole-blue-primary text-kole-blue-primary hover:bg-kole-blue-primary/10 p-2" aria-label={t('clientTrackRidePage.callDriverLabel', {driverName: driverStaticDetails.name})}>
+                    <Phone className="h-5 w-5" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="border-kole-blue-primary text-kole-blue-primary hover:bg-kole-blue-primary/10 p-2" aria-label={t('clientTrackRidePage.messageDriverLabel', {driverName: driverStaticDetails.name})}>
+                    <MessageCircle className="h-5 w-5" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={handleShareRide} className="border-kole-blue-primary text-kole-blue-primary hover:bg-kole-blue-primary/10 p-2" aria-label={t('clientTrackRidePage.buttons.shareRideAriaLabel')}>
+                    <Share2 className="h-5 w-5" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="icon" onClick={callDriver}>
-                  <Phone className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon">
-                  <MessageCircle className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            )}
             
-            {/* Détails du trajet */}
             <div className="space-y-3 mb-4">
               <div className="flex items-start">
-                <MapPin className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
+                <MapPin className="h-5 w-5 text-kole-orange-primary mr-2 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium">Départ</p>
-                  <p className="text-sm">{rideDetails.pickup.address}</p>
+                  <p className="text-xs text-kole-text-secondary uppercase">{t('rideInfoCard.fromLabel')}</p>
+                  <p className="text-sm text-kole-text-primary">{rideDetails.pickup.address}</p>
                 </div>
               </div>
-              
               <div className="flex items-start">
-                <Navigation className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
+                <Navigation className="h-5 w-5 text-kole-green-dark mr-2 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium">Destination</p>
-                  <p className="text-sm">{rideDetails.destination.address}</p>
+                  <p className="text-xs text-kole-text-secondary uppercase">{t('rideInfoCard.toLabel')}</p>
+                  <p className="text-sm text-kole-text-primary">{rideDetails.destination.address}</p>
                 </div>
               </div>
             </div>
             
-            {/* Actions spécifiques selon le statut */}
-            {rideStatus === 'waiting' && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
+            {currentRideStatus === 'WAITING_AT_PICKUP' && (
+              <div className="space-y-3 my-4 p-3 bg-kole-blue-primary/5 rounded-lg">
+                <div className="flex justify-between items-center text-kole-blue-dark">
                   <div>
-                    <p className="text-sm font-medium">Temps d'attente</p>
-                    <p className={`font-bold ${waitingTimer !== null && waitingTimer < 0 ? 'text-red-500' : ''}`}>
+                    <p className="text-sm font-medium">{t('clientTrackRidePage.waitingTimeLabel')}</p>
+                    <p className={`font-bold text-lg ${waitingTimer !== null && waitingTimer < 0 ? 'text-kole-destructive' : ''}`}>
                       {formatWaitingTime()}
                     </p>
                   </div>
-                  
                   {waitingTimer !== null && waitingTimer < 0 && (
                     <div className="text-right">
-                      <p className="text-sm font-medium">Frais supplémentaires</p>
-                      <p className="font-bold text-red-500">+{extraCharge} FCFA</p>
+                      <p className="text-sm font-medium">{t('clientTrackRidePage.extraChargeLabel')}</p>
+                      <p className="font-bold text-kole-destructive text-lg">+{extraCharge} FCFA</p>
                     </div>
                   )}
                 </div>
-                
-                <Button 
-                  className="w-full bg-green-500 hover:bg-green-600"
-                  onClick={confirmPresence}
-                >
-                  Je suis présent
+                <Button className="w-full kole-btn-primary bg-kole-green-dark hover:bg-kole-green-dark/90" onClick={confirmPresence}>
+                  {t('clientTrackRidePage.confirmPresenceButton')}
                 </Button>
               </div>
             )}
             
-            {/* Prix total */}
-            <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="mt-4 pt-4 border-t border-kole-border">
               <div className="flex justify-between">
-                <p className="font-medium">Prix total</p>
-                <p className="font-bold">{rideDetails.price + extraCharge} FCFA</p>
+                <p className="font-medium text-kole-text-secondary">{t('clientTrackRidePage.totalPriceLabel')}</p>
+                <p className="font-bold text-kole-text-primary text-lg">{rideDetails.price + extraCharge} FCFA</p>
               </div>
             </div>
+
+            {/* SOS Button and Dialog */}
+            <div className="mt-4">
+              <AlertDialog open={showSosConfirmDialog} onOpenChange={setShowSosConfirmDialog}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    className="w-full font-bold bg-kole-destructive text-white hover:bg-kole-destructive/90"
+                    disabled={isActivatingSos}
+                  >
+                    {isActivatingSos ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
+                    {t('clientTrackRidePage.buttons.sos')}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="kole-card">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t('clientTrackRidePage.sosConfirmDialog.title')}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('clientTrackRidePage.sosConfirmDialog.message')}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="kole-btn-secondary" disabled={isActivatingSos}>{t('clientTrackRidePage.sosConfirmDialog.cancelText')}</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="kole-btn-destructive" // Ensure this style exists or use bg-kole-destructive etc.
+                      onClick={handleSosConfirm}
+                      disabled={isActivatingSos}
+                    >
+                      {isActivatingSos ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      {t('clientTrackRidePage.sosConfirmDialog.confirmText')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            {/* Cancel Ride Button and Dialog */}
+            {(currentRideStatus === 'TO_CLIENT' || currentRideStatus === 'WAITING_AT_PICKUP') && (
+              <div className="mt-2">
+                <AlertDialog open={showCancelConfirmDialog} onOpenChange={setShowCancelConfirmDialog}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full font-semibold border-kole-destructive text-kole-destructive hover:bg-kole-destructive/10"
+                      disabled={isCancellingRide}
+                    >
+                      {isCancellingRide ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      {t('clientTrackRidePage.buttons.cancelRide')}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="kole-card">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t('clientTrackRidePage.cancelRideDialog.title')}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {currentRideStatus === 'TO_CLIENT'
+                          ? t('clientTrackRidePage.cancelRideDialog.messageBeforeDriverArrival')
+                          : t('clientTrackRidePage.cancelRideDialog.messageDefault')}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="kole-btn-secondary" disabled={isCancellingRide}>
+                        {t('clientTrackRidePage.cancelRideDialog.keepRideText')}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-kole-destructive hover:bg-kole-destructive/90 text-white"
+                        onClick={handleCancelRideConfirm}
+                        disabled={isCancellingRide}
+                      >
+                        {isCancellingRide ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        {t('clientTrackRidePage.cancelRideDialog.confirmText')}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

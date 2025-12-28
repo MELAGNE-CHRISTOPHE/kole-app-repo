@@ -1,237 +1,262 @@
 // src/components/Auth/PhoneSignInForm.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
 import { createOrUpdateUser } from '../../services/firestore';
+import { Phone, KeyRound, Loader2 } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { useTranslation } from 'react-i18next'; // Import useTranslation
 
-// Constantes
+// Constants
 const CONFIRMATION_CODE_LENGTH = 6;
-const GENERIC_PHONE_ERROR = "Une erreur est survenue. Veuillez vérifier votre numéro et réessayer.";
+// GENERIC_PHONE_ERROR will be replaced by a translation key
 
-// Interface pour les props (si nécessaire à l'avenir)
+// Zod Schema with translation keys
+const phoneSignInSchema = z.object({
+  phoneNumber: z.string()
+    .min(10, { message: "phoneSignInForm.validation.phoneNumberTooShort" })
+    .regex(/^\+[1-9]\d{7,14}$/, { message: "phoneSignInForm.validation.phoneNumberFormat" }),
+  otp: z.string()
+    .optional()
+    .refine(val => val === undefined || val.length === 0 || val.length === CONFIRMATION_CODE_LENGTH, {
+      message: "phoneSignInForm.validation.otpLength", // This key will need {length: CONFIRMATION_CODE_LENGTH} passed to t()
+    }),
+});
+type PhoneSignInInputs = z.infer<typeof phoneSignInSchema>;
+
 interface PhoneSignInFormProps {}
 
 const PhoneSignInForm: React.FC<PhoneSignInFormProps> = () => {
-  // États
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
+  const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'enterPhone' | 'enterOtp'>('enterPhone');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const navigate = useNavigate(); // Hook pour la redirection
+  const [confirmationResultState, setConfirmationResultState] = useState<ConfirmationResult | null>(null);
+  const navigate = useNavigate();
 
-  // Référence pour le conteneur reCAPTCHA
   const recaptchaContainerRef = useRef<HTMLDivElement>(null);
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
-  // Effet pour initialiser reCAPTCHA une seule fois
+  const { register, handleSubmit, formState: { errors }, trigger, getValues, setValue } = useForm<PhoneSignInInputs>({
+    resolver: zodResolver(phoneSignInSchema),
+    mode: 'onChange',
+    defaultValues: { phoneNumber: '', otp: '' }
+  });
+
   useEffect(() => {
-    if (recaptchaContainerRef.current && !recaptchaVerifierRef.current) {
+    if (recaptchaContainerRef.current && !recaptchaVerifierRef.current && auth) {
       try {
         recaptchaVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
           'size': 'invisible',
-          'callback': () => {
-            console.log("reCAPTCHA résolu");
-          },
+          'callback': () => console.log("reCAPTCHA resolved"),
           'expired-callback': () => {
-            console.warn("reCAPTCHA expiré");
-            setError("Le contrôle de sécurité a expiré. Veuillez réessayer.");
-            recaptchaVerifierRef.current?.render().then(widgetId => {
-              // @ts-ignore
-              window.grecaptcha.reset(widgetId);
-            });
+            console.warn("reCAPTCHA expired");
+            setError(t('phoneSignInForm.errors.recaptchaExpired'));
+            if (recaptchaVerifierRef.current) {
+                recaptchaVerifierRef.current.render().then(widgetId => {
+                    // @ts-ignore
+                    window.grecaptcha?.reset(widgetId);
+                }).catch(err => console.error("Error resetting reCAPTCHA", err));
+            }
           }
         });
-        recaptchaVerifierRef.current.render();
+        recaptchaVerifierRef.current.render().catch(err => {
+            console.error("Error rendering reCAPTCHA initially:", err);
+            setError(t('phoneSignInForm.errors.recaptchaInitFailed'));
+        });
       } catch (error) {
-        console.error("Erreur lors de l'initialisation de reCAPTCHA:", error);
-        setError("Impossible d'initialiser le contrôle de sécurité. Veuillez rafraîchir la page.");
+        console.error("Error initializing reCAPTCHA:", error);
+        setError(t('phoneSignInForm.errors.recaptchaInitFailed'));
       }
     }
+    return () => { /* Cleanup */ };
+  }, [auth, t]);
 
-    return () => {
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear();
-        recaptchaVerifierRef.current = null;
-      }
-    };
-  }, []);
-
-  // Fonction pour envoyer le code OTP
-  const handleSendOtp = async () => {
+  const handleSendOtpAttempt = async () => {
     setError(null);
-    if (!phoneNumber || !recaptchaVerifierRef.current) {
-      setError("Veuillez entrer un numéro de téléphone valide.");
+    const isValidPhoneNumber = await trigger("phoneNumber");
+
+    if (!isValidPhoneNumber) return;
+
+    if (!recaptchaVerifierRef.current) {
+      setError(t('phoneSignInForm.errors.recaptchaNotReady'));
       return;
     }
     setLoading(true);
+    const currentPhoneNumberValue = getValues("phoneNumber");
 
     try {
-      const result = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifierRef.current);
-      setConfirmationResult(result);
+      const result = await signInWithPhoneNumber(auth, currentPhoneNumberValue, recaptchaVerifierRef.current);
+      setConfirmationResultState(result);
       setStep('enterOtp');
-      console.log("Code OTP envoyé avec succès.");
     } catch (error: any) {
-      console.error("Erreur lors de l'envoi du code OTP:", error);
+      console.error("Error sending OTP:", error);
       if (error.code === 'auth/invalid-phone-number') {
-        setError("Le format du numéro de téléphone n'est pas valide.");
+        setError(t('phoneSignInForm.errors.invalidPhoneNumberFormatFb'));
       } else if (error.code === 'auth/too-many-requests') {
-        setError("Trop de demandes. Veuillez réessayer plus tard.");
+        setError(t('phoneSignInForm.errors.tooManyRequestsFb'));
       } else {
-        setError(GENERIC_PHONE_ERROR);
+        setError(t('phoneSignInForm.errors.sendOtpFailed'));
       }
-      recaptchaVerifierRef.current?.render().then(widgetId => {
+      if (recaptchaVerifierRef.current) {
         // @ts-ignore
-        window.grecaptcha.reset(widgetId);
-      });
+        recaptchaVerifierRef.current.render().then(widgetId => window.grecaptcha?.reset(widgetId));
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Fonction pour vérifier le code OTP
-  const handleVerifyOtp = async () => {
+  const onSubmitOtp: SubmitHandler<PhoneSignInInputs> = async (data) => {
     setError(null);
-    if (!otp || otp.length !== CONFIRMATION_CODE_LENGTH || !confirmationResult) {
-      setError(`Veuillez entrer le code à ${CONFIRMATION_CODE_LENGTH} chiffres reçu.`);
+    const isValidOtp = await trigger("otp");
+    if (!isValidOtp || !data.otp || data.otp.length !== CONFIRMATION_CODE_LENGTH) {
+        if (!errors.otp) {
+             setError(t('phoneSignInForm.errors.enterOtpCode', { length: CONFIRMATION_CODE_LENGTH }));
+        } // else RHF error will be displayed via t(errors.otp.message)
+        return;
+    }
+
+    if (!confirmationResultState) {
+      setError(t('phoneSignInForm.errors.noVerificationSession'));
       return;
     }
     setLoading(true);
 
     try {
-      const userCredential = await confirmationResult.confirm(otp);
-      console.log("Connexion par téléphone réussie:", userCredential.user.uid);
-      
-      // Créer/Mettre à jour l'utilisateur dans Firestore
-      await createOrUpdateUser(userCredential.user);
-      
-      // Rediriger vers le tableau de bord
-      navigate('/dashboard');
-      
+      const userCredential = await confirmationResultState.confirm(data.otp);
+      await createOrUpdateUser(userCredential.user, { phoneNumber: userCredential.user.phoneNumber, accountType: 'client' });
+      navigate('/client');
     } catch (error: any) {
-      console.error("Erreur lors de la vérification du code:", error);
-      if (error.code === 'auth/invalid-verification-code') {
-        setError("Le code de vérification est invalide.");
+      console.error("Error verifying OTP:", error);
+      if (error.code === 'auth/invalid-verification-code' || error.code === 'auth/session-expired') {
+        setError(t('phoneSignInForm.errors.invalidOtpCodeFb'));
       } else if (error.code === 'auth/code-expired') {
-        setError("Le code de vérification a expiré. Veuillez renvoyer un code.");
+        setError(t('phoneSignInForm.errors.otpCodeExpiredFb'));
       } else {
-        setError(GENERIC_PHONE_ERROR);
+        setError(t('phoneSignInForm.errors.verifyOtpFailed'));
       }
     } finally {
       setLoading(false);
     }
   };
+
+  const cardTitleText = step === 'enterPhone' ? t('phoneSignInForm.stepEnterPhone.title') : t('phoneSignInForm.stepEnterOtp.title');
 
   return (
-    <div className="max-w-md mx-auto p-6 md:p-8 bg-white rounded-lg shadow-lg border border-gray-200">
-      <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">
-        {step === 'enterPhone' ? 'Connexion par téléphone' : 'Vérifier le code'}
-      </h2>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md border border-red-300">
-          {error}
-        </div>
-      )}
-
-      {/* Étape 1: Saisie du numéro */}
-      {step === 'enterPhone' && (
-        <form onSubmit={(e) => { e.preventDefault(); handleSendOtp(); }} className="space-y-4">
-          <div>
-            <label htmlFor="phone-number" className="block mb-1 text-sm font-medium text-gray-700">
-              Numéro de téléphone (avec indicatif pays)
-            </label>
-            <input
-              type="tel"
-              id="phone-number"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="+225XXXXXXXX" // Exemple Côte d'Ivoire
-              required
-              disabled={loading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent transition duration-200"
-              autoComplete="tel"
-            />
+    <Card className="kole-card bg-white rounded-xl-kole shadow-lg border-kole-border w-full">
+      <CardHeader className="p-8 pb-6 text-center">
+        <CardTitle className="text-2xl font-bold text-kole-brown-dark">
+          {cardTitleText}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-8 pt-0">
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md border border-red-300">
+            {error /* Already translated string from setError(t(...)) */}
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 px-4 bg-gradient-to-r from-red-800 to-yellow-700 hover:opacity-90 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-600 disabled:opacity-50 transition duration-200"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Envoi...
-              </span>
-            ) : 'Envoyer le code'}
-          </button>
-        </form>
-      )}
+        )}
 
-      {/* Étape 2: Saisie du code OTP */}
-      {step === 'enterOtp' && (
-        <form onSubmit={(e) => { e.preventDefault(); handleVerifyOtp(); }} className="space-y-4">
-          <div>
-            <label htmlFor="otp-code" className="block mb-1 text-sm font-medium text-gray-700">
-              Code de vérification (reçu par SMS)
-            </label>
-            <input
-              type="number"
-              id="otp-code"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              placeholder={`Code à ${CONFIRMATION_CODE_LENGTH} chiffres`}
-              required
-              maxLength={CONFIRMATION_CODE_LENGTH}
-              disabled={loading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent transition duration-200 appearance-none m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              autoComplete="one-time-code"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading || otp.length !== CONFIRMATION_CODE_LENGTH}
-            className="w-full py-2.5 px-4 bg-gradient-to-r from-red-800 to-yellow-700 hover:opacity-90 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-600 disabled:opacity-50 transition duration-200"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Vérification...
-              </span>
-            ) : 'Vérifier et se connecter'}
-          </button>
-          <div className="text-center">
-            <button
+        {step === 'enterPhone' && (
+          <div className="space-y-6">
+            <div>
+              <label htmlFor="phone-number" className="block text-sm font-medium text-kole-text-dark mb-2">
+                {t('phoneSignInForm.labels.phoneNumber')}
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-kole-text-secondary" />
+                <Input
+                  type="tel"
+                  id="phone-number"
+                  placeholder={t('phoneSignInForm.placeholders.phoneNumber')}
+                  disabled={loading}
+                  className="pl-10 kole-input"
+                  autoComplete="tel"
+                  aria-invalid={!!errors.phoneNumber}
+                  aria-describedby="phoneNumberError"
+                  {...register("phoneNumber")}
+                />
+              </div>
+              {errors.phoneNumber && <p id="phoneNumberError" className="text-xs text-red-500 mt-1">{errors.phoneNumber.message ? t(errors.phoneNumber.message) : null}</p>}
+            </div>
+            <Button
               type="button"
-              onClick={() => { setStep('enterPhone'); setError(null); setOtp(''); /* Réinitialiser reCAPTCHA si nécessaire */ }}
+              onClick={handleSendOtpAttempt}
               disabled={loading}
-              className="text-xs text-yellow-700 hover:text-red-800 transition-colors"
+              className="w-full kole-btn-primary py-3 text-lg font-semibold"
             >
-              Changer de numéro ou renvoyer le code
-            </button>
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" />
+                  {t('phoneSignInForm.buttons.sendingOtp')}
+                </span>
+              ) : t('phoneSignInForm.buttons.sendOtp')}
+            </Button>
           </div>
-        </form>
-      )}
+        )}
 
-      {/* Conteneur pour reCAPTCHA (doit être dans le DOM) */}
-      <div id="recaptcha-container" ref={recaptchaContainerRef}></div>
-
-      {/* Lien vers d'autres méthodes */}
-      <p className="mt-6 text-center text-sm text-gray-600">
-        Ou connectez-vous avec{' '}
-        <Link to="/login" className="font-medium text-yellow-700 hover:text-red-800 transition-colors">
-          votre email
-        </Link>
-      </p>
-    </div>
+        {step === 'enterOtp' && (
+          <form onSubmit={handleSubmit(onSubmitOtp)} className="space-y-6">
+            <div>
+              <label htmlFor="otp-code" className="block text-sm font-medium text-kole-text-dark mb-2">
+                {t('phoneSignInForm.labels.otpCode')}
+              </label>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-kole-text-secondary" />
+                <Input
+                  type="number"
+                  id="otp-code"
+                  placeholder={t('phoneSignInForm.placeholders.otpCode', { length: CONFIRMATION_CODE_LENGTH })}
+                  onInput={(e) => {
+                      const target = e.target as HTMLInputElement;
+                      if (target.value.length > CONFIRMATION_CODE_LENGTH) {
+                          target.value = target.value.slice(0, CONFIRMATION_CODE_LENGTH);
+                      }
+                  }}
+                  disabled={loading}
+                  className="pl-10 kole-input appearance-none m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  autoComplete="one-time-code"
+                  aria-invalid={!!errors.otp}
+                  aria-describedby="otpError"
+                  {...register("otp")}
+                />
+              </div>
+              {errors.otp && <p id="otpError" className="text-xs text-red-500 mt-1">{errors.otp.message ? t(errors.otp.message, { length: CONFIRMATION_CODE_LENGTH }) : null}</p>}
+            </div>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full kole-btn-primary py-3 text-lg font-semibold"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" />
+                  {t('phoneSignInForm.buttons.verifyingOtp')}
+                </span>
+              ) : t('phoneSignInForm.buttons.verifyAndSignIn')}
+            </Button>
+            <div className="text-center">
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => { setStep('enterPhone'); setError(null); setValue('otp', ''); }}
+                disabled={loading}
+                className="text-sm text-kole-blue-primary hover:underline h-auto py-0"
+              >
+                {t('phoneSignInForm.buttons.changeNumberOrResend')}
+              </Button>
+            </div>
+          </form>
+        )}
+        <div id="recaptcha-container" ref={recaptchaContainerRef} className="my-2"></div>
+      </CardContent>
+    </Card>
   );
 };
 

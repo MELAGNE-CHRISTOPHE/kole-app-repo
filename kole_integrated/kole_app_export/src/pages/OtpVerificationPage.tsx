@@ -1,20 +1,20 @@
 // src/pages/OtpVerificationPage.tsx
 import React, { useState, useRef, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom"; // Ajout de useLocation
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ShieldCheck, ArrowLeft, RotateCcw } from "lucide-react";
-import KoleLogo from "/assets/kole_logo_new.png";
-// import { AuthContext } from "../context/AuthContext"; // Pour la logique de vérification et de navigation
+import AuthLayout from '../../components/Layout/AuthLayout';
+import { useTranslation } from 'react-i18next'; // Import useTranslation
 
 const OtpVerificationPage: React.FC = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const [otp, setOtp] = useState<string[]>(new Array(6).fill(""));
   const navigate = useNavigate();
-  const location = useLocation(); // Pour récupérer le numéro de téléphone si passé en state
+  const location = useLocation();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const [timer, setTimer] = useState(60); // Minuteur ajusté à 60s
+  const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
-  // Exemple: récupérer le numéro de téléphone depuis la navigation
-  const phoneNumber = location.state?.phoneNumber || "+XXX XX XX XX XX"; // Numéro par défaut si non fourni
+  const phoneNumber = location.state?.phoneNumber || "+XXX XX XX XX XX";
 
   useEffect(() => {
     if (inputRefs.current[0]) {
@@ -53,26 +53,23 @@ const OtpVerificationPage: React.FC = () => {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const enteredOtp = otp.join("");
-    // TODO: Implémenter la logique de vérification OTP réelle avec Firebase
     console.log("OTP Entered:", enteredOtp, "for phone:", phoneNumber);
     if (enteredOtp.length === 6) {
-      // TODO: La navigation doit dépendre du type d'utilisateur (client/chauffeur) et du succès de la vérification
-      // Exemple: const userType = location.state?.userType;
-      // if (userType === "driver") navigate("/driver/dashboard"); else navigate("/client/home");
-      alert(`Code ${enteredOtp} soumis pour vérification (simulation).`);
-      navigate("/client/home"); // Placeholder
+      // TODO: Implement OTP verification logic with Firebase
+      // TODO: Navigate based on user type and success
+      alert(t('otpVerificationPage.alerts.codeSubmitted', { code: enteredOtp }));
+      navigate("/client"); // Adjusted placeholder navigation
     } else {
-      alert("Veuillez entrer un code OTP valide à 6 chiffres.");
+      alert(t('otpVerificationPage.alerts.invalidOtp'));
     }
   };
 
   const handleResendOtp = () => {
     if (canResend) {
-      // TODO: Implémenter la logique de renvoi d'OTP réelle avec Firebase
       console.log("Resending OTP for:", phoneNumber);
+      // TODO: Implement resend OTP logic with Firebase
       setOtp(new Array(6).fill(""));
-      setTimer(60); // Réinitialiser le minuteur à 60s
-      // setCanResend(false); // Est géré par useEffect sur timer
+      setTimer(60);
       if (inputRefs.current[0]) {
         inputRefs.current[0]?.focus();
       }
@@ -80,24 +77,21 @@ const OtpVerificationPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-kole-cream-bg p-4">
-      <div className="bg-white p-6 md:p-8 rounded-xl-kole shadow-lg w-full max-w-md">
-        <img src={KoleLogo} alt="Kôlê Logo" className="h-12 w-auto mx-auto mb-2" />
-        <p className="text-center text-kole-text_secondary font-semibold text-sm mb-6">VOTRE TRAJET, NOTRE MISSION</p>
-        <h1 className="text-xl font-bold text-center text-kole-text-primary mb-2">Vérifiez votre numéro</h1>
-        <p className="text-center text-sm text-kole-text-secondary mb-6">
-          Nous avons envoyé un code à 6 chiffres au <span className="font-semibold text-kole-text-primary">{phoneNumber}</span>. Veuillez le saisir ci-dessous.
-        </p>
-        
+    <AuthLayout>
+      {/* Main content card */}
+      <div className="bg-white p-6 md:p-8 rounded-xl-kole shadow-lg w-full">
+        <h2 className="text-xl font-bold text-center text-kole-text-primary mb-2">{t('otpVerificationPage.formTitle')}</h2>
+        <p className="text-center text-sm text-kole-text-secondary mb-6" dangerouslySetInnerHTML={{ __html: t('otpVerificationPage.formDescription', { phoneNumber: `<span class="font-semibold text-kole-text-primary">${phoneNumber}</span>` }) }} />
+
         <form onSubmit={handleSubmit}>
           <div className="flex justify-center gap-2 sm:gap-3 mb-6">
             {otp.map((data, index) => (
               <input
                 key={index}
-                type="tel"
+                type="tel" // Using "tel" for numeric keyboard on mobile
                 name={`otp-${index}`}
                 maxLength={1}
-                className="w-10 h-12 sm:w-12 sm:h-14 text-center text-lg sm:text-xl font-semibold border border-kole-border rounded-lg-kole focus:outline-none focus:ring-2 focus:ring-kole-blue-primary appearance-none"
+                className="w-10 h-12 sm:w-12 sm:h-14 text-center text-lg sm:text-xl font-semibold border border-kole-border rounded-lg-kole focus:outline-none focus:ring-2 focus:ring-kole-blue-primary"
                 value={data}
                 onChange={(e) => handleChange(e.target, index)}
                 onFocus={(e) => e.target.select()}
@@ -109,34 +103,34 @@ const OtpVerificationPage: React.FC = () => {
             ))}
           </div>
 
-          <button 
+          {/* This button is styled like kole-btn-primary but is native. Could be ui/Button. */}
+          <button
             type="submit"
-            className="w-full bg-kole-blue-primary text-white py-3.5 rounded-lg-kole hover:bg-kole-blue-dark transition duration-300 font-semibold flex items-center justify-center text-base mb-4"
+            className="w-full kole-btn-primary py-3 text-lg font-semibold flex items-center justify-center mb-4"
           >
-            <ShieldCheck className="mr-2 h-5 w-5" /> Vérifier
+            <ShieldCheck className="mr-2 h-5 w-5" /> {t('otpVerificationPage.buttons.verify')}
           </button>
         </form>
 
         <div className="text-center text-sm mb-6">
-          <button 
+          <button
             onClick={handleResendOtp}
             disabled={!canResend}
             className={`text-kole-blue-primary hover:underline flex items-center justify-center mx-auto ${!canResend ? "opacity-50 cursor-not-allowed" : ""}`}
           >
-            <RotateCcw className="mr-1 h-4 w-4" /> 
-            {canResend ? "Renvoyer le code" : `Renvoyer le code (${String(Math.floor(timer/60)).padStart(2,"")}:${String(timer%60).padStart(2,"0")})`}
+            <RotateCcw className="mr-1 h-4 w-4" />
+            {canResend ? t('otpVerificationPage.buttons.resendCodeActive') : t('otpVerificationPage.buttons.resendCodeTimed', { time: `${String(Math.floor(timer/60)).padStart(2,"0")}:${String(timer%60).padStart(2,"0")}` })}
           </button>
         </div>
 
         <p className="text-center text-sm text-kole-text-secondary">
           <Link to="/signup" className="font-medium text-kole-blue-primary hover:underline flex items-center justify-center">
-            <ArrowLeft className="mr-1 h-4 w-4" /> Retour à l\u0027inscription
+            <ArrowLeft className="mr-1 h-4 w-4" /> {t('otpVerificationPage.links.backToSignUp')}
           </Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 
 export default OtpVerificationPage;
-

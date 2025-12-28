@@ -1,63 +1,73 @@
 // src/components/Auth/LoginForm.tsx
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom'; // Import Link and useNavigate
+import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { useTranslation } from 'react-i18next'; // Import useTranslation
+
+// Zod Schema for validation using translation keys
+const loginSchema = (t: (key: string) => string) => z.object({
+  email: z.string().email({ message: t("loginForm.validation.emailInvalid") }),
+  password: z.string().min(1, { message: t("loginForm.validation.passwordRequired") }),
+});
+// Type inference will need to be handled carefully if t is passed like this,
+// or schema messages are just keys. For simplicity, schema messages will be keys.
+const staticLoginSchema = z.object({
+  email: z.string().email({ message: "loginForm.validation.emailInvalid" }),
+  password: z.string().min(1, { message: "loginForm.validation.passwordRequired" }),
+});
+type LoginFormInputs = z.infer<typeof staticLoginSchema>;
 
 const LoginForm: React.FC = () => {
-  // États pour les champs du formulaire
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation(); // Initialize useTranslation
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null); // For Firebase errors
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate(); // Hook pour la redirection
+  const navigate = useNavigate();
 
-  // Fonction de validation de l'email avec regex
-  const validateEmail = (email: string): boolean => {
-    // Regex standard pour la validation d'email
-    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-    return emailRegex.test(email);
-  };
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormInputs>({
+    // Resolver needs the t function if schema is dynamic, or use static keys.
+    // Using static keys for messages in schema for simplicity here.
+    resolver: zodResolver(staticLoginSchema),
+    mode: 'onChange',
+  });
 
-  // Fonction de gestion de la soumission du formulaire
-  const handleLogin = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-
-    // Validation du format de l'email avant de contacter Firebase
-    if (!validateEmail(email)) {
-      setError("Veuillez entrer une adresse email valide.");
-      return;
-    }
-
+  const onSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
+    setError(null); // Clear previous Firebase errors
     setLoading(true);
 
     try {
-      // Connexion de l'utilisateur avec Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // Use data.email and data.password from the form
+      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
       console.log("Connexion réussie pour l'utilisateur:", userCredential.user.uid);
-      
-      // Rediriger l'utilisateur vers le tableau de bord après la connexion
-      navigate('/dashboard'); 
+      navigate('/client');
       
     } catch (firebaseError: any) {
       console.error("Erreur Firebase lors de la connexion:", firebaseError);
-      
-      // Gestion des erreurs Firebase
       switch(firebaseError.code) {
         case 'auth/user-not-found':
         case 'auth/wrong-password':
-        case 'auth/invalid-credential': // Code d'erreur plus récent pour email/mdp incorrect
-          setError("Email ou mot de passe incorrect.");
+        case 'auth/invalid-credential':
+          setError(t('loginForm.firebaseErrors.invalidCredentials'));
           break;
-        case 'auth/invalid-email': // Ce cas peut toujours être utile si Firebase renvoie cette erreur spécifique
-          setError("Le format de l'email n'est pas valide.");
+        case 'auth/invalid-email': // This case might be covered by Zod, but good to have a fallback
+          setError(t('loginForm.firebaseErrors.invalidEmailFormat'));
           break;
         case 'auth/too-many-requests':
-          setError("Trop de tentatives de connexion. Veuillez réessayer plus tard.");
+          setError(t('loginForm.firebaseErrors.tooManyRequests'));
+          break;
+        case 'auth/network-request-failed':
+          setError(t('loginForm.firebaseErrors.networkError'));
           break;
         default:
-          setError("Une erreur est survenue lors de la connexion. Veuillez réessayer.");
+          setError(t('loginForm.firebaseErrors.genericError'));
       }
     } finally {
       setLoading(false);
@@ -65,86 +75,112 @@ const LoginForm: React.FC = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 md:p-8 bg-white rounded-lg shadow-lg border border-gray-200">
-      <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Se connecter à Kôlê</h2>
-      
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md border border-red-300">
-          {error}
-        </div>
-      )}
-      
-      <form onSubmit={handleLogin} className="space-y-4">
-        <div>
-          <label htmlFor="login-email" className="block mb-1 text-sm font-medium text-gray-700">
-            Adresse Email
-          </label>
-          <input
-            type="email" // Garder type="email" pour la validation native et le clavier mobile
-            id="login-email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent transition duration-200"
-            placeholder="Votre email"
-            required
-            disabled={loading}
-            autoComplete="email"
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="login-password" className="block mb-1 text-sm font-medium text-gray-700">
-            Mot de passe
-          </label>
-          <input
-            type="password"
-            id="login-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent transition duration-200"
-            placeholder="Votre mot de passe"
-            required
-            disabled={loading}
-            autoComplete="current-password"
-          />
-          <div className="text-right mt-1">
-            <Link to="/forgot-password" className="text-xs text-yellow-700 hover:text-red-800 transition-colors">
-              Mot de passe oublié ?
+    // Assuming 'kole-card' provides base styling like bg-white, rounded-xl-kole, shadow-lg, border-kole-border
+    // If kole-card is just an alias for these, then className can be more explicit:
+    // className="bg-white rounded-xl-kole shadow-lg border border-kole-border"
+    <Card className="kole-card">
+      <CardHeader className="p-8 pb-4 md:pb-6">
+        <CardTitle className="text-2xl font-bold text-kole-brown-dark text-center">
+          {t('loginForm.title')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-8 pt-0">
+        {error && ( // This error is for Firebase errors, already a string from t()
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md border border-red-300">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Champ Email */}
+          <div>
+            <label htmlFor="login-email" className="block text-sm font-medium text-kole-text-dark mb-2">
+              {t('loginForm.emailLabel')}
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-kole-text-secondary" />
+              <Input
+                type="email"
+                id="login-email"
+                placeholder={t('loginForm.emailPlaceholder')}
+                className="pl-10 kole-input"
+                disabled={loading}
+                autoComplete="email"
+                aria-invalid={!!errors.email}
+                aria-describedby="emailError"
+                {...register("email")}
+              />
+            </div>
+            {errors.email && <p id="emailError" className="text-xs text-red-500 mt-1">{errors.email.message ? t(errors.email.message) : null}</p>}
+          </div>
+
+          {/* Champ Mot de passe */}
+          <div>
+            <label htmlFor="login-password" className="block text-sm font-medium text-kole-text-dark mb-2">
+              {t('loginForm.passwordLabel')}
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-kole-text-secondary" />
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                id="login-password"
+                placeholder={t('loginForm.passwordPlaceholder')}
+                className="pl-10 pr-10 kole-input"
+                disabled={loading}
+                autoComplete="current-password"
+                aria-invalid={!!errors.password}
+                aria-describedby="passwordError"
+                {...register("password")}
+              />
+              <Button
+                type="button"
+                variant="ghost" // Use ghost variant for minimal styling
+                size="icon" // Use icon size
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-kole-text-secondary hover:text-kole-text-dark h-auto px-0 py-0" // Adjusted classes, h-auto and px/py to allow icon to define size
+                aria-label={showPassword ? t('loginForm.hidePassword') : t('loginForm.showPassword')}
+                disabled={loading}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </Button>
+            </div>
+            {errors.password && <p id="passwordError" className="text-xs text-red-500 mt-1">{errors.password.message ? t(errors.password.message) : null}</p>}
+          </div>
+
+          {/* Lien mot de passe oublié */}
+          <div className="text-right">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-kole-blue-primary hover:underline"
+            >
+              {t('loginForm.forgotPasswordLink')}
             </Link>
           </div>
-        </div>
-        
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2.5 px-4 bg-gradient-to-r from-red-800 to-yellow-700 hover:opacity-90 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-600 disabled:opacity-50 transition duration-200"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Connexion...
-            </span>
-          ) : 'Se connecter'}
-        </button>
-        
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Pas encore de compte?{' '}
-          <Link to="/signup" className="font-medium text-yellow-700 hover:text-red-800 transition-colors">
-            Créer un compte
-          </Link>
-        </p>
-        
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Ou{' '}
-          <Link to="/phone-signin" className="font-medium text-yellow-700 hover:text-red-800 transition-colors">
-            se connecter avec votre téléphone
-          </Link>
-        </p>
-      </form>
-    </div>
+
+          {/* Bouton de connexion principal */}
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full kole-btn-primary py-3 text-lg font-semibold"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {t('loginForm.submitButtonLoading')}
+              </span>
+            ) : (
+              <>
+                <User className="h-5 w-5 mr-2" />
+                {t('loginForm.submitButton')}
+              </>
+            )}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 };
 

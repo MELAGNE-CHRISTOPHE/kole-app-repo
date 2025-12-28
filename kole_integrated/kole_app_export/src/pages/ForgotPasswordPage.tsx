@@ -1,83 +1,116 @@
 // src/pages/ForgotPasswordPage.tsx
-import React, { useState } from "react"; // Ajout de useState
-import { Link /*, useNavigate*/ } from "react-router-dom"; // useNavigate commenté car non utilisé pour l'instant
-import { Mail, ArrowLeft, Send, CheckCircle } from "lucide-react"; // Ajout de CheckCircle
-import KoleLogo from "/assets/kole_logo_new.png"; // Chemin du logo corrigé
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, Send, CheckCircle, Phone } from "lucide-react";
+import AuthLayout from '../../components/Layout/AuthLayout';
+import { Input } from "@/components/ui/input"; // Import Input
+import { Button } from "@/components/ui/button"; // Import Button
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { useTranslation } from 'react-i18next'; // Import useTranslation
+
+// Zod Schema with translation keys
+const forgotPasswordSchema = z.object({
+  phoneNumber: z.string()
+    .min(10, { message: "forgotPasswordPage.validation.phoneNumberInvalidMin" })
+    .regex(/^\+[1-9]\d{7,14}$/, { message: "forgotPasswordPage.validation.phoneNumberFormat" }),
+});
+type ForgotPasswordInputs = z.infer<typeof forgotPasswordSchema>;
 
 const ForgotPasswordPage: React.FC = () => {
-  const [emailOrPhone, setEmailOrPhone] = useState("");
-  const [submitted, setSubmitted] = useState(false); // État pour le message de confirmation
-  // const navigate = useNavigate(); // Commenté car non utilisé pour l'instant
+  const { t } = useTranslation(); // Initialize useTranslation
+  const [submitted, setSubmitted] = useState(false);
+  const [submittedPhoneNumber, setSubmittedPhoneNumber] = useState(""); // To display in success message
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    // TODO: Implémenter la logique d'envoi du lien de réinitialisation avec Firebase
-    console.log("Demande de réinitialisation pour:", emailOrPhone);
+  const { register, handleSubmit, formState: { errors } } = useForm<ForgotPasswordInputs>({
+    resolver: zodResolver(forgotPasswordSchema), // Schema messages are now keys
+    mode: 'onChange',
+    defaultValues: { phoneNumber: '' },
+  });
+
+  const onSubmitRHF: SubmitHandler<ForgotPasswordInputs> = async (data) => {
+    setLoading(true);
+    // TODO: Implémenter la logique d'envoi du lien/code de réinitialisation avec Firebase
+    console.log("Demande de réinitialisation pour:", data.phoneNumber);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setSubmittedPhoneNumber(data.phoneNumber);
     setSubmitted(true);
-    // Optionnel: rediriger après un délai ou laisser l'utilisateur cliquer sur le lien de retour
-    // setTimeout(() => navigate("/login"), 5000);
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-kole-cream-bg p-4">
-      {/* Arrière-plan harmonisé avec les autres pages d'authentification */}
-      <div className="bg-white p-8 rounded-xl-kole shadow-lg w-full max-w-md">
-        <img src={KoleLogo} alt="Kôlê Logo" className="h-12 w-auto mx-auto mb-2" />
-        <p className="text-center text-kole-text_secondary font-semibold text-sm mb-6">VOTRE TRAJET, NOTRE MISSION</p>
-
+    <AuthLayout>
+      <div className="bg-white p-8 rounded-xl-kole shadow-lg w-full">
         {!submitted ? (
           <>
-            <h1 className="text-xl font-bold text-center text-kole-text-primary mb-2">Mot de passe oublié ?</h1>
+            <h2 className="text-xl font-bold text-center text-kole-text-primary mb-2">{t('forgotPasswordPage.formTitle')}</h2>
             <p className="text-center text-sm text-kole-text-secondary mb-6">
-              Entrez le numéro de téléphone associé à votre compte. Nous vous enverrons un code pour réinitialiser votre mot de passe.
+              {t('forgotPasswordPage.formDescription')}
             </p>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="mb-6">
-                <label htmlFor="emailOrPhone" className="block text-sm font-medium text-kole-text-primary mb-1">Numéro de téléphone</label>
-                {/* Champ ajusté pour téléphone uniquement pour cohérence avec le flux OTP */}
+
+            <form onSubmit={handleSubmit(onSubmitRHF)} className="space-y-6">
+              <div>
+                <label htmlFor="phoneNumber" className="block text-sm font-medium text-kole-text-dark mb-2">
+                  {t('forgotPasswordPage.labels.phoneNumber')}
+                </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input 
-                    type="tel" 
-                    id="emailOrPhone" 
-                    placeholder="Votre numéro de téléphone"
-                    value={emailOrPhone}
-                    onChange={(e) => setEmailOrPhone(e.target.value)}
-                    className="w-full pl-10 pr-3 py-3 border border-kole-border rounded-lg-kole focus:outline-none focus:ring-2 focus:ring-kole-blue-primary focus:border-transparent"
-                    required
+                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-kole-text-secondary" />
+                  <Input
+                    type="tel"
+                    id="phoneNumber"
+                    placeholder={t('forgotPasswordPage.placeholders.phoneNumber')}
+                    className="pl-10 kole-input"
+                    {...register("phoneNumber")}
+                    disabled={loading}
+                    aria-invalid={!!errors.phoneNumber}
+                    aria-describedby="phoneNumberErrorFGP"
                   />
                 </div>
+                {errors.phoneNumber && <p id="phoneNumberErrorFGP" className="text-xs text-red-500 mt-1">{errors.phoneNumber.message ? t(errors.phoneNumber.message) : null}</p>}
               </div>
 
-              <button 
-                type="submit" 
-                className="w-full bg-kole-blue-primary text-white py-3 rounded-lg-kole hover:bg-kole-blue-dark transition duration-300 font-semibold flex items-center justify-center text-base"
+              <Button
+                type="submit"
+                className="w-full kole-btn-primary py-3 text-lg font-semibold flex items-center justify-center"
+                disabled={loading}
               >
-                <Send className="mr-2 h-5 w-5" /> Envoyer le code
-              </button>
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {t('forgotPasswordPage.buttons.sendingCode')}
+                  </span>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-5 w-5" /> {t('forgotPasswordPage.buttons.sendCode')}
+                  </>
+                )}
+              </Button>
             </form>
           </>
         ) : (
           <div className="text-center">
             <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
-            <h1 className="text-xl font-bold text-kole-text-primary mb-2">Demande envoyée !</h1>
+            <h2 className="text-xl font-bold text-kole-text-primary mb-2">{t('forgotPasswordPage.confirmation.title')}</h2>
             <p className="text-sm text-kole-text-secondary mb-6">
-              Si un compte est associé à <span className="font-semibold">{emailOrPhone}</span>, vous recevrez un SMS avec les instructions pour réinitialiser votre mot de passe.
+              {t('forgotPasswordPage.confirmation.description', { phoneNumber: submittedPhoneNumber })}
             </p>
           </div>
         )}
 
         <p className="mt-8 text-center text-sm text-kole-text-secondary">
           <Link to="/login" className="font-medium text-kole-blue-primary hover:underline flex items-center justify-center">
-            <ArrowLeft className="mr-1 h-4 w-4" /> Retour à la connexion
+            <ArrowLeft className="mr-1 h-4 w-4" /> {t('forgotPasswordPage.links.backToLogin')}
           </Link>
         </p>
       </div>
-      {/* Les motifs en overlay ont été retirés pour harmonisation, à discuter si un motif global doit être appliqué */}
-    </div>
+    </AuthLayout>
   );
 };
 
 export default ForgotPasswordPage;
-

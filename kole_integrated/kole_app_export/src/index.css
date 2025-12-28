@@ -29,3 +29,58 @@ html, body {
   flex-direction: column;
 }
 
+/* Radar Animation Keyframes */
+@keyframes ping-radar {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Radar Animation Utility Classes */
+.animate-ping-slow-radar {
+  animation: ping-radar 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.animate-ping-medium-radar {
+  animation: ping-radar 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  animation-delay: 0.5s; /* Offset start */
+}
+
+.animate-ping-fast-radar {
+  animation: ping-radar 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  animation-delay: 1s; /* Further offset start */
+}
+
+/* General purpose Kole icon styling (example, can be expanded) */
+.kole-map-icon {
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: 50%;
+  /* box-shadow: 0 0 5px rgba(0,0,0,0.3); Optional shadow for better visibility */
+}
+
+.kole-driver-map-icon {
+  /* Default style if image is not found or for generic representation */
+  background-color: var(--kole-orange-primary); /* Kôlê orange */
+  width: 24px; /* Default size */
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px var(--kole-orange-primary); /* Creates an outer ring effect */
+}
+
+/* Example of using an actual image for the driver icon */
+/* .kole-driver-map-icon-img {
+  background-image: url('/assets/icons/kole_moto_icon.png');
+  width: 30px;
+  height: 30px;
+} */
